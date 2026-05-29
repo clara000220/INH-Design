@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon.jsx';
 import { Btn } from '../../components/primitives.jsx';
+import { setRemember } from '../../lib/supabase.js';
 
 export function Logo({ height = 54 }) {
   return <img src="/assets/inh-logo.png" alt="INH Renovation & Design" style={{ height, width: 'auto', display: 'block' }} />;
@@ -55,6 +56,7 @@ export function Login({ onSignIn, onForgot, live }) {
     setErr(null);
     setBusy(true);
     try {
+      setRemember(remember);
       await onSignIn(email, pw);
     } catch (e) {
       setErr(e?.message || 'Email or password is incorrect');
