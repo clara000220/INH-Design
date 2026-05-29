@@ -266,7 +266,12 @@ create or replace function public.guard_profile_role()
   returns trigger language plpgsql security definer set search_path = public
 as $$
 begin
-  if new.role is distinct from old.role and not public.is_owner() then
+  -- auth.uid() is null in a trusted server context (SQL Editor / service role),
+  -- used to bootstrap the first owner. A logged-in user must be an owner to
+  -- change any role (prevents self-escalation).
+  if new.role is distinct from old.role
+     and auth.uid() is not null
+     and not public.is_owner() then
     raise exception 'only an owner may change a user role';
   end if;
   return new;
