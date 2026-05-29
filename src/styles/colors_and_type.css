@@ -1,0 +1,148 @@
+/* ============================================================
+   INH Renovation & Design — Design System
+   colors_and_type.css  ·  v2.1
+   Brand colours sampled from the official INH logo.
+   ------------------------------------------------------------
+   FONTS: No original font files were provided. The spec calls
+   for a "strong geometric sans" (display, echoing the blocky
+   INH logo letters) and a "clean humanist sans" (body).
+   Substituted with the nearest Google Fonts matches:
+     · Display  = Archivo        (industrial-modern grotesque)
+     · Body/UI  = Hanken Grotesk (clean humanist sans)
+   Replace the @import + --font-* vars if true brand fonts arrive.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ---------- Brand palette (sampled from logo) ---------- */
+  --inh-lime:        #D8D80A;  /* primary accent — fills only, never small text */
+  --inh-lime-tint:   #F4F4C2;  /* soft selected rows, pills, banners */
+  --inh-charcoal:    #2A2523;  /* primary dark — text, dark hero cards */
+  --inh-charcoal-80: #4A4543;  /* secondary text, icons */
+  --inh-grey:        #8B8A88;  /* tertiary text, metadata, dividers, tagline */
+  --surface-white:   #FFFFFF;  /* cards, sheets, list rows */
+  --canvas:          #F7F7F4;  /* warm off-white app background */
+
+  /* Lime states (fills) */
+  --inh-lime-press:  #C2C209;  /* pressed/darker lime */
+  --inh-lime-soft:   #FBFBE8;  /* faintest lime wash */
+
+  /* ---------- Functional colours (status — kept apart from brand) ---------- */
+  --success:      #4F9D69;  /* completed, paid, released */
+  --success-tint: #E6F1EA;
+  --warning:      #E0A106;  /* due soon, pending action */
+  --warning-tint: #FBF1D8;
+  --error:        #C0392B;  /* overdue, failed login, sign out */
+  --error-tint:   #F7E4E1;
+  --info:         #2D7DB3;  /* neutral notices */
+  --info-tint:    #E2EEF6;
+
+  /* ---------- Semantic aliases ---------- */
+  --fg-1: var(--inh-charcoal);     /* primary text */
+  --fg-2: var(--inh-charcoal-80);  /* secondary text */
+  --fg-3: var(--inh-grey);         /* tertiary / metadata */
+  --bg:        var(--canvas);      /* app background */
+  --surface:   var(--surface-white);
+  --surface-2: #F0F0EC;            /* subtle filled rows / track */
+
+  --accent:    var(--inh-lime);    /* primary accent fill */
+  --accent-on: var(--inh-charcoal);/* text/icons that sit ON the accent */
+  --on-dark:   #F4F4EF;            /* text on charcoal surfaces */
+  --on-dark-2: #B6B3AF;            /* secondary text on charcoal */
+
+  --border:    #E6E5E0;            /* hairline dividers / card borders */
+  --border-strong: #D8D7D1;
+
+  /* ---------- Type families ---------- */
+  --font-display: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --font-body:    'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+
+  /* ---------- Type scale (mobile, ~390px) ---------- */
+  --text-display: 34px;  /* hero numerals, splash */
+  --text-h1:      26px;  /* screen titles */
+  --text-h2:      20px;  /* section headers */
+  --text-h3:      17px;  /* card titles, list headers */
+  --text-body:    15px;  /* default body / list items */
+  --text-sm:      13px;  /* secondary copy */
+  --text-meta:    12px;  /* metadata, captions */
+  --text-eyebrow: 11px;  /* uppercase letter-spaced labels */
+
+  /* ---------- Radii ---------- */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;   /* default card */
+  --r-lg: 20px;   /* hero cards, sheets */
+  --r-pill: 999px;
+
+  /* ---------- Spacing (4px base) ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* ---------- Elevation ---------- */
+  --shadow-sm: 0 1px 2px rgba(42,37,35,0.06);
+  --shadow-md: 0 4px 16px rgba(42,37,35,0.08);
+  --shadow-lg: 0 12px 32px rgba(42,37,35,0.12);
+  --shadow-sheet: 0 -8px 32px rgba(42,37,35,0.16);
+}
+
+/* ============================================================
+   Base element styles
+   ============================================================ */
+body {
+  font-family: var(--font-body);
+  color: var(--fg-1);
+  background: var(--bg);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display / headings — geometric, industrial */
+h1, .h1, h2, .h2, h3, .h3 {
+  font-family: var(--font-display);
+  color: var(--fg-1);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin: 0;
+}
+h1, .h1 { font-size: var(--text-h1); font-weight: 800; }
+h2, .h2 { font-size: var(--text-h2); font-weight: 700; }
+h3, .h3 { font-size: var(--text-h3); font-weight: 700; }
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: var(--text-display);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+p, .body { font-size: var(--text-body); color: var(--fg-1); margin: 0; }
+.body-2  { font-size: var(--text-sm); color: var(--fg-2); }
+.meta    { font-size: var(--text-meta); color: var(--fg-3); }
+
+/* Eyebrow — uppercase, letter-spaced, grey */
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--text-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* Numeric / currency emphasis (RM figures) use display family */
+.figure {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
