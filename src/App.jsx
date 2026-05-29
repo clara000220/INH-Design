@@ -120,15 +120,19 @@ function PropertySheet({ role, projects, onClose }) {
 function EditNameSheet({ initial, onClose, onSave }) {
   const [name, setName] = useState(initial || '');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   const save = async () => {
     if (!name.trim()) return;
-    setBusy(true);
-    try { await onSave(name.trim()); onClose(); } finally { setBusy(false); }
+    setBusy(true); setErr(null);
+    try { await onSave(name.trim()); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not save'); }
+    finally { setBusy(false); }
   };
   return (
     <Sheet title="Edit my name" onClose={onClose}>
       <p className="body-2" style={{ marginBottom: 16 }}>This is the name shown to your team across INH.</p>
       <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Your name" autoFocus />
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
       <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save name'}</Btn></div>
     </Sheet>
   );
@@ -137,12 +141,15 @@ function EditNameSheet({ initial, onClose, onSave }) {
 function AddProjectSheet({ onClose, onSave }) {
   const [f, setF] = useState({ name: '', code: '', address: '', type: '', est_handover: '' });
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
   const ready = f.name.trim() && f.code.trim();
   const save = async () => {
     if (!ready) return;
-    setBusy(true);
-    try { await onSave(f); onClose(); } finally { setBusy(false); }
+    setBusy(true); setErr(null);
+    try { await onSave(f); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not create project'); }
+    finally { setBusy(false); }
   };
   return (
     <Sheet title="Add project" onClose={onClose}>
@@ -153,6 +160,7 @@ function AddProjectSheet({ onClose, onSave }) {
         <Field label="Type" icon="home" value={f.type} onChange={set('type')} placeholder="e.g. Full home renovation" />
         <Field label="Est. handover" icon="calendar" type="date" value={f.est_handover} onChange={set('est_handover')} placeholder="" />
       </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
       <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create project'}</Btn></div>
     </Sheet>
   );
@@ -277,9 +285,12 @@ function AddPhaseSheet({ onClose, onSave }) {
 function ProgressSheet({ project, onClose, onSave }) {
   const [pct, setPct] = useState(project?.progress ?? 0);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   const save = async () => {
-    setBusy(true);
-    try { await onSave(Math.round(pct)); onClose(); } finally { setBusy(false); }
+    setBusy(true); setErr(null);
+    try { await onSave(Math.round(pct)); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not save progress'); }
+    finally { setBusy(false); }
   };
   return (
     <Sheet title="Update progress" onClose={onClose}>
@@ -289,6 +300,7 @@ function ProgressSheet({ project, onClose, onSave }) {
       </div>
       <input type="range" min={0} max={100} value={pct} onChange={e => setPct(Number(e.target.value))}
         style={{ width: '100%', accentColor: 'var(--inh-charcoal)' }} />
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
       <div style={{ marginTop: 20 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save progress'}</Btn></div>
     </Sheet>
   );
