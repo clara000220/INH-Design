@@ -528,7 +528,8 @@ export default function App() {
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
-          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null} />;
+          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -545,7 +546,8 @@ export default function App() {
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
-          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null} />;
+          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}

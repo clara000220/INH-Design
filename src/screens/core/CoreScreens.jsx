@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -93,6 +93,16 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 <div className="inh-row__main">
                   <div className="inh-row__title" style={{ fontSize: 14 }}>{t.title}</div>
                 </div>
+                {CAN_EDIT(role) && onAddSchedulePhoto && (
+                  <button onClick={() => onAddSchedulePhoto(t)} title="Add progress photos" aria-label="Add progress photos"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      width: 34, height: 34, borderRadius: 9, border: '1px solid var(--border-strong)',
+                      background: 'var(--surface)', cursor: 'pointer', marginRight: 8,
+                    }}>
+                    <Icon name="camera" size={16} color="var(--fg-2)" />
+                  </button>
+                )}
                 <Pill status={t.state} />
               </div>
             ))}
