@@ -17,7 +17,7 @@ const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0,
 const ROOM_PRESETS = ['Kitchen', 'Living room', 'Master bath', 'Bedroom', 'Exterior'];
 
 function PhotoSheet({ photo, onClose, onAdd }) {
-  const [room, setRoom] = useState('');
+  const [room, setRoom] = useState(photo.room || '');
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -448,6 +448,12 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleMarkPhaseComplete = async (phase) => {
+    if (!IS_LIVE) return;
+    await api.updatePhase(phase.id, { status: 'completed', pct: 100 });
+    await loadDetail(activeProjectId);
+  };
+
   const handleUploadDoc = async (file, opts) => {
     if (!IS_LIVE) return;
     await api.uploadDocument(activeProjectId, file, opts);
@@ -511,7 +517,9 @@ export default function App() {
         return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
-          onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null} />;
+          onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
+          onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
+          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -523,7 +531,12 @@ export default function App() {
     if (tab === 'home') {
       if (role === 'homeowner') {
         if (!currentProject) return <EmptyState text="No project assigned to your account yet." />;
-        return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={live(detail?.schedule)} />;
+        return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
+          onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
+          onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
+          onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
+          onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
+          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}

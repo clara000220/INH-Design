@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -125,10 +125,39 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 {open === i && (
                   <div style={{ padding: '0 16px 16px 56px' }}>
                     <ProgressBar pct={p.pct} green={p.status === 'completed'} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                      <span className="meta">{p.pct}% complete</span>
-                      {CAN_EDIT(role) && <button className="inh-link" style={{ fontSize: 12 }}>Update tasks</button>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                      <span className="meta">{p.status === 'completed' ? 'Done' : `${p.pct}% complete`}</span>
                     </div>
+                    {CAN_EDIT(role) && (onAddPhasePhoto || onMarkPhaseComplete) && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                        {onAddPhasePhoto && (
+                          <button onClick={() => onAddPhasePhoto(p)} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border-strong)',
+                            background: 'var(--surface)', color: 'var(--fg-1)', borderRadius: 10, padding: '8px 12px',
+                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                          }}>
+                            <Icon name="camera" size={15} color="var(--fg-2)" /> Add photos
+                          </button>
+                        )}
+                        {onMarkPhaseComplete && p.status !== 'completed' && (
+                          <button onClick={() => onMarkPhaseComplete(p)} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, border: 'none',
+                            background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '8px 12px',
+                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                          }}>
+                            <Icon name="check-circle" size={15} color="var(--inh-charcoal)" /> Mark complete
+                          </button>
+                        )}
+                        {p.status === 'completed' && (
+                          <span style={{
+                            display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)',
+                            fontWeight: 700, fontSize: 12.5, padding: '8px 0',
+                          }}>
+                            <Icon name="check-circle" size={15} color="var(--success)" /> Completed
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

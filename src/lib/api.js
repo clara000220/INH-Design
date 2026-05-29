@@ -82,6 +82,17 @@ export async function addPhase(projectId, { name, status = 'upcoming', pct = 0, 
   if (error) throw error;
 }
 
+// Update an existing phase (e.g. mark complete, change pct/status/name/dates).
+export async function updatePhase(id, patch = {}) {
+  const clean = {};
+  ['name', 'status', 'pct', 'start_date', 'end_date'].forEach(k => {
+    if (patch[k] !== undefined) clean[k] = patch[k];
+  });
+  if (clean.status === 'completed' && patch.pct === undefined) clean.pct = 100;
+  const { error } = await supabase.from('phases').update(clean).eq('id', id);
+  if (error) throw error;
+}
+
 export async function addScheduleItem(projectId, { title, scheduled_date, state = 'upcoming' }) {
   const { error } = await supabase.from('schedule_items')
     .insert({ project_id: projectId, title, scheduled_date, state });
