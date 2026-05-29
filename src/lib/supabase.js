@@ -21,6 +21,12 @@ const hybridStorage = {
   removeItem: (k) => { localStorage.removeItem(k); sessionStorage.removeItem(k); },
 };
 
+/* By default Supabase serialises auth calls behind a cross-tab Web Locks lock.
+   If another (or stale) tab holds it, signInWithPassword can hang forever.
+   This single-client app doesn't need that coordination, so we run the work
+   directly and avoid the deadlock. */
+const noLock = async (_name, _acquireTimeout, fn) => fn();
+
 /* When env vars are absent we stay in demo mode (supabase === null) so the
    prototype keeps working without a backend. Real auth turns on once the
    anon key is set in .env. */
@@ -29,6 +35,7 @@ export const supabase = url && anon
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        lock: noLock,
         ...(hasWindow ? { storage: hybridStorage } : {}),
       },
     })
