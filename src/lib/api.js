@@ -71,6 +71,23 @@ export async function listPhases(projectId) {
   }));
 }
 
+export async function addPhase(projectId, { name, status = 'upcoming', pct = 0, start_date, end_date }) {
+  const { data: rows } = await supabase.from('phases')
+    .select('sort_order').eq('project_id', projectId).order('sort_order', { ascending: false }).limit(1);
+  const sort_order = (rows?.[0]?.sort_order ?? 0) + 1;
+  const { error } = await supabase.from('phases').insert({
+    project_id: projectId, name, status, pct,
+    start_date: start_date || null, end_date: end_date || null, sort_order,
+  });
+  if (error) throw error;
+}
+
+export async function addScheduleItem(projectId, { title, scheduled_date, state = 'upcoming' }) {
+  const { error } = await supabase.from('schedule_items')
+    .insert({ project_id: projectId, title, scheduled_date, state });
+  if (error) throw error;
+}
+
 export async function listSchedule(projectId) {
   const { data, error } = await supabase.from('schedule_items')
     .select('*').eq('project_id', projectId).order('scheduled_date', { ascending: true });

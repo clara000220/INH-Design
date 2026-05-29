@@ -198,6 +198,82 @@ function UploadDocSheet({ onClose, onSave }) {
   );
 }
 
+function AddScheduleSheet({ onClose, onSave }) {
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [state, setState] = useState('upcoming');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const ready = title.trim() && date;
+  const save = async () => {
+    if (!ready) return;
+    setBusy(true); setErr(null);
+    try { await onSave({ title: title.trim(), scheduled_date: date, state }); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not add item'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Add schedule item" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="What's happening" icon="hard-hat" value={title} onChange={setTitle} placeholder="e.g. Electrical second fix" autoFocus />
+        <Field label="Date" icon="calendar" type="date" value={date} onChange={setDate} placeholder="" />
+        <div>
+          <label className="inh-label">Status</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[['upcoming', 'Upcoming'], ['today', 'Today']].map(([v, l]) => (
+              <button key={v} onClick={() => setState(v)} className={'inh-chip' + (state === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !ready}>{busy ? 'Adding…' : 'Add item'}</Btn></div>
+    </Sheet>
+  );
+}
+
+function AddPhaseSheet({ onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [status, setStatus] = useState('upcoming');
+  const [pct, setPct] = useState(0);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const save = async () => {
+    if (!name.trim()) return;
+    setBusy(true); setErr(null);
+    try { await onSave({ name: name.trim(), status, pct: Math.round(pct), start_date: start, end_date: end }); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not add phase'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Add project phase" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Phase name" icon="briefcase" value={name} onChange={setName} placeholder="e.g. Painting & finishing" autoFocus />
+        <div>
+          <label className="inh-label">Status</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[['upcoming', 'Upcoming'], ['progress', 'In progress'], ['completed', 'Completed']].map(([v, l]) => (
+              <button key={v} onClick={() => setStatus(v)} className={'inh-chip' + (status === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className="inh-label">Completion · {Math.round(pct)}%</label>
+          <input type="range" min={0} max={100} value={pct} onChange={e => setPct(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--inh-charcoal)' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}><Field label="Start" icon="calendar" type="date" value={start} onChange={setStart} placeholder="" /></div>
+          <div style={{ flex: 1 }}><Field label="End" icon="calendar" type="date" value={end} onChange={setEnd} placeholder="" /></div>
+        </div>
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !name.trim()}>{busy ? 'Adding…' : 'Add phase'}</Btn></div>
+    </Sheet>
+  );
+}
+
 function ProgressSheet({ project, onClose, onSave }) {
   const [pct, setPct] = useState(project?.progress ?? 0);
   const [busy, setBusy] = useState(false);
@@ -348,6 +424,18 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleAddSchedule = async (form) => {
+    if (!IS_LIVE) return;
+    await api.addScheduleItem(activeProjectId, form);
+    await loadDetail(activeProjectId);
+  };
+
+  const handleAddPhase = async (form) => {
+    if (!IS_LIVE) return;
+    await api.addPhase(activeProjectId, form);
+    await loadDetail(activeProjectId);
+  };
+
   const handleUploadDoc = async (file, opts) => {
     if (!IS_LIVE) return;
     await api.uploadDocument(activeProjectId, file, opts);
@@ -409,7 +497,9 @@ export default function App() {
     if (top) {
       if (top.type === 'overview')
         return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
-          onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null} />;
+          onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
+          onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
+          onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -454,6 +544,8 @@ export default function App() {
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
+      {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}
+      {sheet === 'addPhase' && <AddPhaseSheet onClose={() => setSheet(null)} onSave={handleAddPhase} />}
       {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
       {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} onAdd={handleAddUpdate} />}
     </div>

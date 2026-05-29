@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -79,9 +79,10 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="inh-section" style={{ margin: '4px 0 10px' }}>This week</div>
-            {CAN_EDIT(role) && <button className="inh-link" style={{ fontSize: 12.5 }}>Edit schedule</button>}
+            {CAN_EDIT(role) && onAddSchedule && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddSchedule}>+ Add item</button>}
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {schedule.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">Nothing scheduled yet.</div></div></div>}
             {schedule.map((t, i) => (
               <div key={i} className="inh-row" style={{ cursor: 'default' }}>
                 <div style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>
@@ -102,9 +103,10 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="inh-section" style={{ margin: '4px 0 10px' }}>Project progress</div>
-            {CAN_EDIT(role) && <button className="inh-link" style={{ fontSize: 12.5 }}>Edit phases</button>}
+            {CAN_EDIT(role) && onAddPhase && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddPhase}>+ Add phase</button>}
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {phases.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No phases added yet.</div></div></div>}
             {phases.map((p, i) => (
               <div key={i} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
                 <div className="inh-row" onClick={() => setOpen(open === i ? -1 : i)} style={{ paddingTop: 13, paddingBottom: 13 }}>
