@@ -463,6 +463,13 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleToggleSchedule = async (item) => {
+    if (!IS_LIVE) return;
+    const next = item.state === 'completed' ? 'upcoming' : 'completed';
+    await api.setScheduleState(item.id, next);
+    await loadDetail(activeProjectId);
+  };
+
   const handleUploadDoc = async (file, opts) => {
     if (!IS_LIVE) return;
     await api.uploadDocument(activeProjectId, file, opts);
@@ -529,7 +536,8 @@ export default function App() {
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
-          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null} />;
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
+          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -547,7 +555,8 @@ export default function App() {
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
-          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null} />;
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
+          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}

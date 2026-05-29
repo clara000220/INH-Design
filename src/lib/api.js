@@ -99,6 +99,12 @@ export async function addScheduleItem(projectId, { title, scheduled_date, state 
   if (error) throw error;
 }
 
+// Update a schedule item's state (e.g. tick it complete, or reopen it).
+export async function setScheduleState(id, state) {
+  const { error } = await supabase.from('schedule_items').update({ state }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function listSchedule(projectId) {
   const { data, error } = await supabase.from('schedule_items')
     .select('*').eq('project_id', projectId).order('scheduled_date', { ascending: true });
