@@ -1,18 +1,25 @@
 /* INH — owner/admin screens: Projects, Fees, FeesDetail, Users, Team, More */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '../../components/Icon.jsx';
-import { Btn, Pill, ProgressBar, Avatar, RoleBadge, Dialog } from '../../components/primitives.jsx';
+import { Btn, Pill, ProgressBar, Avatar, RoleBadge, Dialog, Sheet } from '../../components/primitives.jsx';
+import { Field } from '../auth/Auth.jsx';
 import { INH_DATA, rm, rmk } from '../../data/data.js';
 import { CAN_EDIT } from '../core/CoreScreens.jsx';
 
 /* =================== PROJECTS LIST (admin & owner home) =================== */
-export function ProjectsScreen({ role, onOpenProject }) {
-  const list = role === 'admin' ? INH_DATA.projects.slice(0, 2) : INH_DATA.projects;
+export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProject, onAddProject }) {
+  const list = projects;
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
+        {onAddProject && (
+          <Btn variant="charcoal" icon="plus" onClick={onAddProject} style={{ marginBottom: 16 }}>Add project</Btn>
+        )}
         {role === 'admin' && (
           <p className="body-2" style={{ marginBottom: 12 }}>Showing the {list.length} projects assigned to you.</p>
+        )}
+        {list.length === 0 && (
+          <p className="body-2" style={{ marginTop: 8 }}>No projects yet.</p>
         )}
         <div className="inh-cardgrid">
         {list.map(p => (
@@ -38,10 +45,9 @@ export function ProjectsScreen({ role, onOpenProject }) {
 }
 
 /* =================== FEES — overview (OWNER ONLY) =================== */
-export function FeesScreen({ onOpenProject }) {
+export function FeesScreen({ fees = INH_DATA.projects, onOpenProject }) {
   const [filter, setFilter] = useState('All');
-  const D = INH_DATA;
-  const totals = D.projects.reduce((a, p) => ({
+  const totals = fees.reduce((a, p) => ({
     committed: a.committed + p.committed, released: a.released + p.released, pending: a.pending + p.pending,
   }), { committed: 0, released: 0, pending: 0 });
   const chips = ['All', 'Pending release', 'Released', 'Overdue', 'On hold'];
@@ -73,7 +79,7 @@ export function FeesScreen({ onOpenProject }) {
         </div>
 
         <div className="inh-cardgrid">
-          {D.projects.map(p => (
+          {fees.map(p => (
             <div key={p.id} className="inh-card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => onOpenProject(p)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
@@ -100,17 +106,29 @@ export function FeesScreen({ onOpenProject }) {
 }
 
 /* =================== FEES — project payment detail =================== */
-export function FeesDetailScreen({ project }) {
+export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus }) {
   const [confirm, setConfirm] = useState(null); // {pay, action}
-  const [payments, setPayments] = useState(INH_DATA.payments);
+  const [payments, setPayments] = useState(paymentsProp);
   const [toast, setToast] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const act = () => {
+  useEffect(() => { setPayments(paymentsProp); }, [paymentsProp]);
+
+  const act = async () => {
     const { pay, action } = confirm;
-    setPayments(ps => ps.map(p => p.id === pay.id ? { ...p, status: action === 'release' ? 'released' : 'hold', date: action === 'release' ? 'Released just now' : 'On hold' } : p));
-    setToast(action === 'release' ? `Released ${rm(pay.amount)} to ${pay.contractor}` : `${pay.contractor} put on hold`);
-    setConfirm(null);
-    setTimeout(() => setToast(null), 2600);
+    const status = action === 'release' ? 'released' : 'hold';
+    setBusy(true);
+    try {
+      if (onSetStatus) await onSetStatus(pay.id, status);
+      setPayments(ps => ps.map(p => p.id === pay.id ? { ...p, status, date: action === 'release' ? 'Released just now' : 'On hold' } : p));
+      setToast(action === 'release' ? `Released ${rm(pay.amount)} to ${pay.contractor}` : `${pay.contractor} put on hold`);
+    } catch (e) {
+      setToast(e?.message || 'Could not update payment');
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+      setTimeout(() => setToast(null), 2600);
+    }
   };
 
   return (
@@ -160,7 +178,7 @@ export function FeesDetailScreen({ project }) {
         <div>
           <div className="inh-section" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="shield-check" size={13} color="var(--fg-3)" /> Audit trail</div>
           <div className="inh-card" style={{ padding: '4px 0' }}>
-            {INH_DATA.audit.map((a, i) => (
+            {audit.map((a, i) => (
               <div key={i} style={{ padding: '11px 16px', borderTop: i ? '1px solid var(--border)' : 'none', display: 'flex', gap: 11 }}>
                 <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--inh-lime)', marginTop: 6, flexShrink: 0 }} />
                 <div>
@@ -189,9 +207,9 @@ export function FeesDetailScreen({ project }) {
               : <>Hold the {rm(confirm.pay.amount)} payment to {confirm.pay.contractor}? You can release it later.</>}
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
-            <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
-            <Btn variant={confirm.action === 'release' ? 'charcoal' : 'danger'} onClick={act}>
-              {confirm.action === 'release' ? 'Release' : 'Put on hold'}
+            <Btn variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant={confirm.action === 'release' ? 'charcoal' : 'danger'} onClick={act} disabled={busy}>
+              {busy ? 'Working…' : confirm.action === 'release' ? 'Release' : 'Put on hold'}
             </Btn>
           </div>
         </Dialog>
@@ -210,13 +228,13 @@ export function FeesDetailScreen({ project }) {
 }
 
 /* =================== USERS DIRECTORY (owner, under More) =================== */
-export function UsersScreen({ onInvite }) {
+export function UsersScreen({ users = INH_DATA.users, onInvite }) {
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
         <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>Invite user</Btn>
         <div className="inh-card" style={{ overflow: 'hidden' }}>
-          {INH_DATA.users.map(u => (
+          {users.map(u => (
             <div key={u.id} className="inh-row">
               <Avatar initials={u.initials} light={u.role !== 'owner'} />
               <div className="inh-row__main">
@@ -236,58 +254,116 @@ export function UsersScreen({ onInvite }) {
 }
 
 /* =================== TEAM & ACCESS (per project, owner) =================== */
-export function TeamScreen({ project }) {
-  const T = INH_DATA.team;
-  const Member = ({ m, role }) => (
+const DEMO_MEMBERS = [
+  ...INH_DATA.team.admins.map(m => ({ ...m, role: 'admin' })),
+  ...INH_DATA.team.homeowners.map(m => ({ ...m, role: 'homeowner' })),
+];
+
+export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], onAddMember, onRemoveMember }) {
+  const [picker, setPicker] = useState(false);  // homeowner picker sheet
+  const [busy, setBusy] = useState(false);
+
+  const owners = members.filter(m => m.role === 'owner');
+  const admins = members.filter(m => m.role === 'admin');
+  const hos = members.filter(m => m.role === 'homeowner');
+  const memberIds = new Set(members.map(m => m.id));
+  const candidates = homeowners.filter(h => !memberIds.has(h.id));
+
+  const add = async (userId) => {
+    if (!onAddMember) { setPicker(false); return; }
+    setBusy(true);
+    try { await onAddMember(userId); } finally { setBusy(false); setPicker(false); }
+  };
+  const remove = async (userId) => {
+    if (!onRemoveMember) return;
+    setBusy(true);
+    try { await onRemoveMember(userId); } finally { setBusy(false); }
+  };
+
+  const Member = ({ m, label, removable }) => (
     <div className="inh-row" style={{ cursor: 'default' }}>
       <Avatar initials={m.initials} light />
       <div className="inh-row__main">
         <div className="inh-row__title" style={{ fontSize: 14.5 }}>{m.name}</div>
-        <div className="inh-row__sub">{m.sub}</div>
+        <div className="inh-row__sub">{m.sub || label}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span className="inh-chip" style={{ padding: '5px 11px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>{role}<Icon name="chevron-down" size={13} /></span>
-        <button className="inh-iconbtn" style={{ width: 32, height: 32 }}><Icon name="x" size={15} color="var(--fg-3)" /></button>
+        <span className="inh-chip" style={{ padding: '5px 11px', fontSize: 12 }}>{label}</span>
+        {removable && (
+          <button className="inh-iconbtn" style={{ width: 32, height: 32 }} disabled={busy}
+            onClick={() => remove(m.id)} aria-label={`Remove ${m.name}`}>
+            <Icon name="x" size={15} color="var(--fg-3)" />
+          </button>
+        )}
       </div>
     </div>
   );
+
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <p className="body-2">Control who can see and edit <b style={{ color: 'var(--fg-1)' }}>{project.name}</b>. Changes are confirmed and logged.</p>
+        <p className="body-2">Control who can see <b style={{ color: 'var(--fg-1)' }}>{project.name}</b>. Changes are logged.</p>
 
         <div>
           <div className="inh-section">Owner</div>
-          <div className="inh-card"><div className="inh-row" style={{ cursor: 'default' }}>
-            <Avatar initials="TW" />
-            <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>Tan Wei Ming (you)</div><div className="inh-row__sub">Full access · fixed</div></div>
-            <RoleBadge role="owner" />
-          </div></div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {owners.length
+              ? owners.map(m => <Member key={m.id} m={m} label="Owner" />)
+              : (
+                <div className="inh-row" style={{ cursor: 'default' }}>
+                  <Avatar initials="TW" />
+                  <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>Tan Wei Ming</div><div className="inh-row__sub">Full access · fixed</div></div>
+                  <RoleBadge role="owner" />
+                </div>
+              )}
+          </div>
         </div>
 
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="inh-section" style={{ margin: '4px 0 10px' }}>Admins</div>
-            <button className="inh-link" style={{ fontSize: 12.5 }}>+ Add admin</button>
+          <div className="inh-section" style={{ margin: '4px 0 10px' }}>Admins</div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {admins.length ? admins.map(m => <Member key={m.id} m={m} label="Admin" removable />)
+              : <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No admins assigned.</div></div></div>}
           </div>
-          <div className="inh-card" style={{ overflow: 'hidden' }}>{T.admins.map(m => <Member key={m.id} m={m} role="Admin" />)}</div>
         </div>
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="inh-section" style={{ margin: '4px 0 10px' }}>Homeowners</div>
-            <button className="inh-link" style={{ fontSize: 12.5 }}>+ Add homeowner</button>
+            <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setPicker(true)}>+ Add homeowner</button>
           </div>
-          <div className="inh-card" style={{ overflow: 'hidden' }}>{T.homeowners.map(m => <Member key={m.id} m={m} role="Homeowner" />)}</div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {hos.length ? hos.map(m => <Member key={m.id} m={m} label="Homeowner" removable />)
+              : <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No homeowner assigned yet.</div></div></div>}
+          </div>
         </div>
       </div>
+
+      {picker && (
+        <Sheet title="Assign homeowner" onClose={() => setPicker(false)}>
+          <p className="body-2" style={{ marginBottom: 14 }}>Pick a homeowner to give access to this project.</p>
+          {candidates.length === 0 && <p className="body-2">No more homeowners to add. Invite one from the Users screen first.</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {candidates.map(h => (
+              <button key={h.id} className="inh-row" disabled={busy} onClick={() => add(h.id)}
+                style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer' }}>
+                <Avatar initials={h.initials} light />
+                <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{h.name}</div></div>
+                <Icon name="plus" size={18} color="var(--inh-charcoal)" />
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
 
 /* =================== MORE =================== */
-export function MoreScreen({ role, onUsers, onTeam, onSignOut }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditName }) {
   const meta = INH_DATA.roleMeta[role];
+  const name = profile?.name || meta.person;
+  const initials = profile?.initials || meta.initials;
   const Group = ({ children }) => <div className="inh-card" style={{ overflow: 'hidden' }}>{children}</div>;
   const Item = ({ icon, label, danger, onClick, tint }) => (
     <div className="inh-row" onClick={onClick}>
@@ -302,9 +378,9 @@ export function MoreScreen({ role, onUsers, onTeam, onSignOut }) {
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div className="inh-card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <Avatar initials={meta.initials} size={52} />
+          <Avatar initials={initials} size={52} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17 }}>{meta.person}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17 }}>{name}</div>
             <div className="inh-row__sub">{meta.sub}</div>
           </div>
           <RoleBadge role={role} />
@@ -332,7 +408,7 @@ export function MoreScreen({ role, onUsers, onTeam, onSignOut }) {
         <div>
           <div className="inh-section">Account</div>
           <Group>
-            <Item icon="user" label="Profile & details" />
+            <Item icon="user" label="Edit my name" onClick={onEditName} />
             <Item icon="settings" label="Settings & language" />
             <Item icon="help-circle" label="Support" />
           </Group>

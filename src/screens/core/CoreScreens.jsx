@@ -23,9 +23,11 @@ export function PhotoTile({ room, tone, isNew, count, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress }) {
   const [open, setOpen] = useState(2);
-  const D = INH_DATA;
+  const handover = project?.est_handover
+    ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
+    : '20 Jun';
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -40,8 +42,17 @@ export function OverviewScreen({ role, project }) {
           <ProgressBar pct={project.progress} dark />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, color: 'var(--on-dark-2)', fontSize: 12.5 }}>
             <span>Carpentry &amp; built-ins</span>
-            <span>Est. handover · 20 Jun</span>
+            <span>Est. handover · {handover}</span>
           </div>
+          {CAN_EDIT(role) && onEditProgress && (
+            <button onClick={onEditProgress} style={{
+              marginTop: 16, width: '100%', border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)',
+              color: 'var(--inh-lime)', borderRadius: 12, padding: '11px 14px', fontWeight: 700, fontSize: 13.5,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            }}>
+              <Icon name="check-circle" size={16} color="var(--inh-lime)" /> Update overall progress
+            </button>
+          )}
         </div>
 
         {/* What's happening now */}
@@ -66,7 +77,7 @@ export function OverviewScreen({ role, project }) {
             {CAN_EDIT(role) && <button className="inh-link" style={{ fontSize: 12.5 }}>Edit schedule</button>}
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
-            {D.thisWeek.map((t, i) => (
+            {schedule.map((t, i) => (
               <div key={i} className="inh-row" style={{ cursor: 'default' }}>
                 <div style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: 'var(--fg-3)' }}>{t.day}</div>
@@ -89,7 +100,7 @@ export function OverviewScreen({ role, project }) {
             {CAN_EDIT(role) && <button className="inh-link" style={{ fontSize: 12.5 }}>Edit phases</button>}
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
-            {D.phases.map((p, i) => (
+            {phases.map((p, i) => (
               <div key={i} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
                 <div className="inh-row" onClick={() => setOpen(open === i ? -1 : i)} style={{ paddingTop: 13, paddingBottom: 13 }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -123,10 +134,10 @@ export function OverviewScreen({ role, project }) {
 }
 
 /* =================== UPDATES =================== */
-export function UpdatesScreen({ role, onPhoto }) {
+export function UpdatesScreen({ role, updates = INH_DATA.updates, onPhoto }) {
   const [filter, setFilter] = useState('All');
   const rooms = ['All', 'Kitchen', 'Living room', 'Master bath', 'Exterior'];
-  const list = INH_DATA.updates.filter(u => filter === 'All' || u.room === filter);
+  const list = updates.filter(u => filter === 'All' || u.room === filter);
   // group by date
   const groups = {};
   list.forEach(u => { (groups[u.date] = groups[u.date] || []).push(u); });
@@ -159,7 +170,7 @@ export function UpdatesScreen({ role, onPhoto }) {
 }
 
 /* =================== DOCUMENTS =================== */
-export function DocumentsScreen({ role }) {
+export function DocumentsScreen({ role, documents = INH_DATA.documents }) {
   const iconFor = k => ({ invoice: 'banknote', plan: 'map-pin', doc: 'file-text' }[k] || 'file-text');
   return (
     <div className="inh-scroll">
@@ -170,7 +181,7 @@ export function DocumentsScreen({ role }) {
           </button>
         )}
         <div className="inh-card" style={{ overflow: 'hidden' }}>
-          {INH_DATA.documents.map(d => (
+          {documents.map(d => (
             <div key={d.id} className="inh-row" style={{ opacity: d.ready ? 1 : 0.55, cursor: d.ready ? 'pointer' : 'default' }}>
               <div className="inh-row__ico" style={{ background: d.kind === 'invoice' ? 'var(--inh-lime-tint)' : 'var(--surface-2)' }}>
                 <Icon name={iconFor(d.kind)} size={20} color={d.kind === 'invoice' ? 'var(--inh-charcoal)' : 'var(--fg-2)'} />

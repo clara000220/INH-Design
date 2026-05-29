@@ -1,23 +1,34 @@
-/* INH — App shell, routing, role switching */
+/* INH — App shell, routing, role switching, live data */
 import { useState, useEffect } from 'react';
 import { Icon } from './components/Icon.jsx';
 import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE } from './lib/supabase.js';
+import * as api from './lib/api.js';
 import { Login, ForgotFlow, Field } from './screens/auth/Auth.jsx';
-import { OverviewScreen, UpdatesScreen, DocumentsScreen } from './screens/core/CoreScreens.jsx';
+import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
   ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen,
 } from './screens/owner/OwnerScreens.jsx';
 
-function PhotoSheet({ photo, onClose }) {
+const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+
+/* ---------- sheets ---------- */
+function PhotoSheet({ photo, onClose, onAdd }) {
+  const [room, setRoom] = useState('');
+  const [busy, setBusy] = useState(false);
   if (photo.add) {
+    const publish = async () => {
+      if (!room.trim() || !onAdd) { onClose(); return; }
+      setBusy(true);
+      try { await onAdd(room.trim()); onClose(); } finally { setBusy(false); }
+    };
     return (
       <Sheet title="Add update" onClose={onClose}>
-        <p className="body-2" style={{ marginBottom: 16 }}>Publish photos to the homeowner's Updates feed.</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Btn variant="charcoal" icon="camera" onClick={onClose}>Take photo</Btn>
-          <Btn variant="ghost" icon="image" onClick={onClose}>Choose from library</Btn>
+        <p className="body-2" style={{ marginBottom: 16 }}>Publish a new update to the homeowner's feed. Name the room or area it covers.</p>
+        <Field label="Room / area" icon="image" value={room} onChange={setRoom} placeholder="e.g. Kitchen" autoFocus />
+        <div style={{ marginTop: 18 }}>
+          <Btn variant="primary" icon="check" onClick={publish} disabled={busy || !room.trim()}>{busy ? 'Publishing…' : 'Publish update'}</Btn>
         </div>
       </Sheet>
     );
@@ -62,8 +73,8 @@ function InviteSheet({ onClose }) {
   );
 }
 
-function PropertySheet({ role, onClose }) {
-  const list = role === 'homeowner' ? INH_DATA.projects.slice(0, 1) : INH_DATA.projects;
+function PropertySheet({ role, projects, onClose }) {
+  const list = role === 'homeowner' ? projects.slice(0, 1) : projects;
   return (
     <Sheet title={role === 'homeowner' ? 'Switch property' : 'Switch project'} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -79,6 +90,67 @@ function PropertySheet({ role, onClose }) {
   );
 }
 
+function EditNameSheet({ initial, onClose, onSave }) {
+  const [name, setName] = useState(initial || '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try { await onSave(name.trim()); onClose(); } finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Edit my name" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 16 }}>This is the name shown to your team across INH.</p>
+      <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Your name" autoFocus />
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !name.trim()}>{busy ? 'Saving…' : 'Save name'}</Btn></div>
+    </Sheet>
+  );
+}
+
+function AddProjectSheet({ onClose, onSave }) {
+  const [f, setF] = useState({ name: '', code: '', address: '', type: '', est_handover: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
+  const ready = f.name.trim() && f.code.trim();
+  const save = async () => {
+    if (!ready) return;
+    setBusy(true);
+    try { await onSave(f); onClose(); } finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Add project" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Project name" icon="building" value={f.name} onChange={set('name')} placeholder="e.g. Lot 23, Bukit Indah" autoFocus />
+        <Field label="Project code" icon="briefcase" value={f.code} onChange={set('code')} placeholder="e.g. P-2026-045" />
+        <Field label="Address" icon="map-pin" value={f.address} onChange={set('address')} placeholder="Site address" />
+        <Field label="Type" icon="home" value={f.type} onChange={set('type')} placeholder="e.g. Full home renovation" />
+        <Field label="Est. handover" icon="calendar" type="date" value={f.est_handover} onChange={set('est_handover')} placeholder="" />
+      </div>
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create project'}</Btn></div>
+    </Sheet>
+  );
+}
+
+function ProgressSheet({ project, onClose, onSave }) {
+  const [pct, setPct] = useState(project?.progress ?? 0);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try { await onSave(Math.round(pct)); onClose(); } finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Update progress" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 18 }}>Set overall completion for <b style={{ color: 'var(--fg-1)' }}>{project?.name}</b>. The homeowner sees this instantly.</p>
+      <div style={{ textAlign: 'center', marginBottom: 14 }}>
+        <span className="display" style={{ fontSize: 46, color: 'var(--inh-charcoal)' }}>{Math.round(pct)}%</span>
+      </div>
+      <input type="range" min={0} max={100} value={pct} onChange={e => setPct(Number(e.target.value))}
+        style={{ width: '100%', accentColor: 'var(--inh-charcoal)' }} />
+      <div style={{ marginTop: 20 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save progress'}</Btn></div>
+    </Sheet>
+  );
+}
+
 export default function App() {
   const [auth, setAuth] = useState('login');   // login | forgot | in
   const [role, setRole] = useState(IS_LIVE ? null : 'owner');
@@ -87,10 +159,49 @@ export default function App() {
   const [sheet, setSheet] = useState(null);
   const [photo, setPhoto] = useState(null);
 
-  const project = INH_DATA.projects[0];
+  // data
+  const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
+  const [profile, setProfile] = useState(null);
+  const [users, setUsers] = useState(IS_LIVE ? [] : INH_DATA.users);
+  const [homeowners, setHomeowners] = useState([]);
+  const [fees, setFees] = useState(IS_LIVE ? [] : INH_DATA.projects);
+  const [audit, setAudit] = useState(IS_LIVE ? [] : INH_DATA.audit);
+  const [detail, setDetail] = useState(null);   // { projectId, phases, schedule, updates, documents, payments, members }
+
   const push = v => setStack(s => [...s, v]);
   const pop = () => setStack(s => s.slice(0, -1));
   const top = stack[stack.length - 1];
+
+  const currentProject = projects[0];
+  const activeProject = top?.project || currentProject;
+  const activeProjectId = activeProject?.id;
+  const live = v => (IS_LIVE ? (v ?? []) : undefined);   // demo → undefined → screen uses INH_DATA defaults
+
+  // ---- live data loaders ----
+  const reloadTop = async () => {
+    if (!IS_LIVE) return;
+    const r = await Promise.allSettled([
+      api.listProjects(), api.getMyProfile(), api.listUsers(),
+      api.listHomeowners(), api.listProjectFees(), api.listAudit(),
+    ]);
+    const [p, pr, us, ho, fe, au] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    if (p) setProjects(p);
+    if (pr) setProfile(pr);
+    if (us) setUsers(us);
+    if (ho) setHomeowners(ho);
+    if (fe) setFees(fe);
+    if (au) setAudit(au);
+  };
+
+  const loadDetail = async (projectId) => {
+    if (!IS_LIVE || !projectId) return;
+    const r = await Promise.allSettled([
+      api.listPhases(projectId), api.listSchedule(projectId), api.listUpdates(projectId),
+      api.listDocuments(projectId), api.listPayments(projectId), api.listMembers(projectId),
+    ]);
+    const [phases, schedule, updates, documents, payments, members] = r.map(x => (x.status === 'fulfilled' ? x.value : []));
+    setDetail({ projectId, phases, schedule, updates, documents, payments, members });
+  };
 
   // Real auth: restore any persisted session and react to sign in/out.
   useEffect(() => {
@@ -104,29 +215,92 @@ export default function App() {
       setTab('home');
       setStack([]);
       setAuth('in');
+      reloadTop();
     };
     supabase.auth.getSession().then(({ data }) => apply(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => apply(session));
     return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
-  // Passed to the Login screen. Throws on failure so Login can show the error.
+  // Load the active project's detail whenever it changes.
+  useEffect(() => {
+    if (IS_LIVE && auth === 'in' && activeProjectId) loadDetail(activeProjectId);
+  }, [activeProjectId, auth]);
+
+  // ---- auth handlers ----
   const signIn = async (email, password) => {
     if (!IS_LIVE) { setRole(role || 'owner'); setTab('home'); setStack([]); setAuth('in'); return; }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    // onAuthStateChange handles loading the role and entering the app.
+    // onAuthStateChange handles loading the role + data and entering the app.
   };
 
   const signOut = async () => {
     if (IS_LIVE) await supabase.auth.signOut();
     setRole(IS_LIVE ? null : 'owner');
+    setProfile(null); setDetail(null);
     setTab('home');
     setStack([]);
     setAuth('login');
   };
 
   const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); };
+
+  // ---- interactive feature handlers ----
+  const handleEditName = async (name) => {
+    if (!IS_LIVE) { setProfile({ name, initials: initialsOf(name) }); return; }
+    await api.updateMyName(name);
+    await reloadTop();
+  };
+
+  const handleAddProject = async (form) => {
+    if (!IS_LIVE) {
+      setProjects(ps => [...ps, {
+        id: 'p' + (ps.length + 1), name: form.name, code: form.code, address: form.address,
+        type: form.type, progress: 0, status: 'pending', committed: 0, released: 0, pending: 0, releasedPct: 0,
+      }]);
+      return;
+    }
+    await api.createProject(form);
+    await reloadTop();
+  };
+
+  const handleUpdateProgress = async (id, progress) => {
+    if (!IS_LIVE) {
+      setProjects(ps => ps.map(p => p.id === id ? { ...p, progress, status: progress >= 100 ? 'ontrack' : p.status } : p));
+      return;
+    }
+    await api.updateProjectProgress(id, progress);
+    await reloadTop();
+    await loadDetail(activeProjectId);
+  };
+
+  const handleAddUpdate = async (room) => {
+    if (!IS_LIVE) return;
+    await api.addUpdate(activeProjectId, room);
+    await loadDetail(activeProjectId);
+  };
+
+  const handleAddMember = async (userId) => {
+    if (!IS_LIVE) return;
+    await api.addMember(activeProjectId, userId);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
+
+  const handleRemoveMember = async (userId) => {
+    if (!IS_LIVE) return;
+    await api.removeMember(activeProjectId, userId);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
+
+  const handleSetPayment = async (id, status) => {
+    if (!IS_LIVE) return;
+    await api.setPaymentStatus(id, status);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
 
   // ---- header config ----
   const header = () => {
@@ -141,10 +315,10 @@ export default function App() {
     }
     const base = {
       home: role === 'homeowner'
-        ? { eyebrow: 'Your project', title: 'Overview', property: project.name, onProperty: () => setSheet('property'), onBell: () => {} }
+        ? { eyebrow: 'Your project', title: 'Overview', property: currentProject?.name, onProperty: () => setSheet('property'), onBell: () => {} }
         : { eyebrow: 'INH Design & Build', title: 'Projects', onBell: () => {} },
-      updates:   { eyebrow: role === 'homeowner' ? project.name : 'INH Design & Build', title: 'Updates', onBell: () => {} },
-      documents: { eyebrow: role === 'homeowner' ? project.name : 'INH Design & Build', title: 'Documents' },
+      updates:   { eyebrow: role === 'homeowner' ? currentProject?.name : 'INH Design & Build', title: 'Updates', onBell: () => {} },
+      documents: { eyebrow: role === 'homeowner' ? currentProject?.name : 'INH Design & Build', title: 'Documents' },
       fees:      { eyebrow: 'Owner only', title: 'Fees Release' },
       more:      { title: 'More' },
     }[tab];
@@ -154,20 +328,32 @@ export default function App() {
   // ---- body ----
   const body = () => {
     if (top) {
-      if (top.type === 'overview')   return <OverviewScreen role={role} project={top.project} />;
-      if (top.type === 'feesDetail') return <FeesDetailScreen project={top.project} />;
-      if (top.type === 'users')      return <UsersScreen onInvite={() => setSheet('invite')} />;
-      if (top.type === 'team')       return <TeamScreen project={top.project} />;
+      if (top.type === 'overview')
+        return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
+          onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null} />;
+      if (top.type === 'feesDetail')
+        return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
+      if (top.type === 'users')
+        return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')} />;
+      if (top.type === 'team')
+        return <TeamScreen project={top.project} members={live(detail?.members)} homeowners={homeowners}
+          onAddMember={handleAddMember} onRemoveMember={handleRemoveMember} />;
     }
     if (tab === 'home') {
-      return role === 'homeowner'
-        ? <OverviewScreen role={role} project={project} />
-        : <ProjectsScreen role={role} onOpenProject={p => push({ type: 'overview', project: p })} />;
+      if (role === 'homeowner') {
+        if (!currentProject) return <EmptyState text="No project assigned to your account yet." />;
+        return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={live(detail?.schedule)} />;
+      }
+      return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
+        onOpenProject={p => push({ type: 'overview', project: p })}
+        onAddProject={role === 'owner' ? () => setSheet('addProject') : null} />;
     }
-    if (tab === 'updates')   return <UpdatesScreen role={role} onPhoto={p => setPhoto(p)} />;
-    if (tab === 'documents') return <DocumentsScreen role={role} />;
-    if (tab === 'fees')      return <FeesScreen onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
-    if (tab === 'more')      return <MoreScreen role={role} onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project })} onSignOut={signOut} />;
+    if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
+    if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)} />;
+    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
+    if (tab === 'more')      return <MoreScreen role={role} profile={profile ? { name: profile.full_name || profile.name, initials: profile.initials } : null}
+      onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
+      onSignOut={signOut} onEditName={() => setSheet('editName')} />;
     return null;
   };
 
@@ -183,9 +369,12 @@ export default function App() {
         {body()}
         <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
       </div>
-      {sheet === 'property' && <PropertySheet role={role} onClose={() => setSheet(null)} />}
+      {sheet === 'property' && <PropertySheet role={role} projects={projects} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <InviteSheet onClose={() => setSheet(null)} />}
-      {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} />}
+      {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
+      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
+      {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
+      {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} onAdd={handleAddUpdate} />}
     </div>
   );
 
@@ -209,6 +398,19 @@ export default function App() {
       )}
       <div className="inh-stage">
         {device}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="inh-scroll">
+      <div className="inh-pad" style={{ textAlign: 'center', paddingTop: 60 }}>
+        <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <Icon name="building" size={28} color="var(--fg-3)" />
+        </div>
+        <p className="body-2">{text}</p>
       </div>
     </div>
   );
