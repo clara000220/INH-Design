@@ -362,15 +362,24 @@ export default function App() {
   useEffect(() => {
     if (!IS_LIVE) return;
     let active = true;
-    const apply = async (session) => {
-      if (!session) { if (active) { setAuth('login'); setRole(null); } return; }
-      const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+    // Load the role + top-level data. Deferred out of the auth callback below
+    // so it never blocks signInWithPassword from resolving.
+    const loadRole = async (session) => {
+      const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle();
       if (!active) return;
       setRole(data?.role || 'homeowner');
+      reloadTop();
+    };
+    const apply = (session) => {
+      if (!active) return;
+      if (!session) { setAuth('login'); setRole(null); return; }
+      // Enter the app synchronously; never await supabase calls inside the
+      // onAuthStateChange callback — doing so deadlocks the auth client and
+      // leaves sign-in stuck. Defer the data fetch to the next tick instead.
       setTab('home');
       setStack([]);
       setAuth('in');
-      reloadTop();
+      setTimeout(() => { if (active) loadRole(session); }, 0);
     };
     supabase.auth.getSession().then(({ data }) => apply(data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => apply(session));
