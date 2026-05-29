@@ -7,12 +7,17 @@ import { INH_DATA } from '../../data/data.js';
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
 /* ---- shared placeholder photo tile (drop real renovation photos here) ---- */
-export function PhotoTile({ room, tone, isNew, count, onClick }) {
+export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
   return (
-    <div className="inh-photo" style={{ background: tone, cursor: 'pointer' }} onClick={onClick}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
-        <Icon name="image" size={34} color="#fff" stroke={1.6} />
-      </div>
+    <div className="inh-photo" style={{
+      background: tone, cursor: 'pointer',
+      backgroundImage: thumb ? `url(${thumb})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center',
+    }} onClick={onClick}>
+      {!thumb && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
+          <Icon name="image" size={34} color="#fff" stroke={1.6} />
+        </div>
+      )}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '20px 10px 8px', background: 'linear-gradient(transparent, rgba(42,37,35,0.55))' }}>
         <div style={{ color: '#fff', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13 }}>{room}</div>
       </div>
@@ -170,19 +175,20 @@ export function UpdatesScreen({ role, updates = INH_DATA.updates, onPhoto }) {
 }
 
 /* =================== DOCUMENTS =================== */
-export function DocumentsScreen({ role, documents = INH_DATA.documents }) {
+export function DocumentsScreen({ role, documents = INH_DATA.documents, onUpload, onOpenDoc }) {
   const iconFor = k => ({ invoice: 'banknote', plan: 'map-pin', doc: 'file-text' }[k] || 'file-text');
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
-        {CAN_EDIT(role) && (
-          <button className="inh-btn inh-btn--ghost" style={{ marginBottom: 16 }}>
+        {CAN_EDIT(role) && onUpload && (
+          <button className="inh-btn inh-btn--ghost" style={{ marginBottom: 16 }} onClick={onUpload}>
             <Icon name="download" size={18} style={{ transform: 'rotate(180deg)' }} /> Upload document
           </button>
         )}
         <div className="inh-card" style={{ overflow: 'hidden' }}>
           {documents.map(d => (
-            <div key={d.id} className="inh-row" style={{ opacity: d.ready ? 1 : 0.55, cursor: d.ready ? 'pointer' : 'default' }}>
+            <div key={d.id} className="inh-row" style={{ opacity: d.ready ? 1 : 0.55, cursor: d.ready ? 'pointer' : 'default' }}
+              onClick={() => d.ready && onOpenDoc && onOpenDoc(d)}>
               <div className="inh-row__ico" style={{ background: d.kind === 'invoice' ? 'var(--inh-lime-tint)' : 'var(--surface-2)' }}>
                 <Icon name={iconFor(d.kind)} size={20} color={d.kind === 'invoice' ? 'var(--inh-charcoal)' : 'var(--fg-2)'} />
               </div>

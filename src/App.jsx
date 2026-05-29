@@ -14,19 +14,44 @@ import {
 const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 
 /* ---------- sheets ---------- */
+const ROOM_PRESETS = ['Kitchen', 'Living room', 'Master bath', 'Bedroom', 'Exterior'];
+
 function PhotoSheet({ photo, onClose, onAdd }) {
   const [room, setRoom] = useState('');
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
   if (photo.add) {
     const publish = async () => {
       if (!room.trim() || !onAdd) { onClose(); return; }
-      setBusy(true);
-      try { await onAdd(room.trim()); onClose(); } finally { setBusy(false); }
+      setBusy(true); setErr(null);
+      try { await onAdd(room.trim(), files); onClose(); }
+      catch (e) { setErr(e?.message || 'Upload failed'); }
+      finally { setBusy(false); }
     };
     return (
-      <Sheet title="Add update" onClose={onClose}>
-        <p className="body-2" style={{ marginBottom: 16 }}>Publish a new update to the homeowner's feed. Name the room or area it covers.</p>
-        <Field label="Room / area" icon="image" value={room} onChange={setRoom} placeholder="e.g. Kitchen" autoFocus />
+      <Sheet title="Add progress update" onClose={onClose}>
+        <p className="body-2" style={{ marginBottom: 14 }}>Pick the area, then add photos. They publish to the homeowner's Updates feed.</p>
+        <label className="inh-label">Room / area</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {ROOM_PRESETS.map(r => (
+            <button key={r} onClick={() => setRoom(r)} className={'inh-chip' + (room === r ? ' active' : '')}>{r}</button>
+          ))}
+        </div>
+        <Field label="" icon="image" value={room} onChange={setRoom} placeholder="…or type an area" />
+
+        <label className="inh-label" style={{ marginTop: 14 }}>Photos</label>
+        <label style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer',
+          border: '1.5px dashed var(--border-strong)', borderRadius: 12, padding: '18px 14px', color: 'var(--fg-2)', fontWeight: 600, fontSize: 13.5,
+        }}>
+          <Icon name="camera" size={18} />
+          {files.length ? `${files.length} photo${files.length > 1 ? 's' : ''} selected` : 'Choose photos'}
+          <input type="file" accept="image/*" multiple style={{ display: 'none' }}
+            onChange={e => setFiles(Array.from(e.target.files || []))} />
+        </label>
+
+        {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
         <div style={{ marginTop: 18 }}>
           <Btn variant="primary" icon="check" onClick={publish} disabled={busy || !room.trim()}>{busy ? 'Publishing…' : 'Publish update'}</Btn>
         </div>
@@ -35,10 +60,12 @@ function PhotoSheet({ photo, onClose, onAdd }) {
   }
   return (
     <Sheet onClose={onClose}>
-      <div style={{ borderRadius: 16, overflow: 'hidden', aspectRatio: '4/3', background: photo.tone, position: 'relative', marginBottom: 14 }}>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
-          <Icon name="image" size={46} color="#fff" stroke={1.5} />
-        </div>
+      <div style={{ borderRadius: 16, overflow: 'hidden', aspectRatio: '4/3', background: photo.tone, position: 'relative', marginBottom: 14, backgroundImage: photo.thumb ? `url(${photo.thumb})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        {!photo.thumb && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
+            <Icon name="image" size={46} color="#fff" stroke={1.5} />
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -127,6 +154,46 @@ function AddProjectSheet({ onClose, onSave }) {
         <Field label="Est. handover" icon="calendar" type="date" value={f.est_handover} onChange={set('est_handover')} placeholder="" />
       </div>
       <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create project'}</Btn></div>
+    </Sheet>
+  );
+}
+
+function UploadDocSheet({ onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState('doc');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const kinds = [['doc', 'Document'], ['invoice', 'Invoice'], ['plan', 'Plan']];
+  const save = async () => {
+    if (!file) return;
+    setBusy(true); setErr(null);
+    try { await onSave(file, { name: name.trim() || file.name, kind }); onClose(); }
+    catch (e) { setErr(e?.message || 'Upload failed'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Upload document" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 14 }}>Add a file to this project. Members can view it; only INH staff can upload.</p>
+      <Field label="Display name" icon="file-text" value={name} onChange={setName} placeholder="e.g. Milestone 3 Invoice" autoFocus />
+      <label className="inh-label" style={{ marginTop: 14 }}>Type</label>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+        {kinds.map(([v, l]) => (
+          <button key={v} onClick={() => setKind(v)} className={'inh-chip' + (kind === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
+        ))}
+      </div>
+      <label className="inh-label" style={{ marginTop: 14 }}>File</label>
+      <label style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer',
+        border: '1.5px dashed var(--border-strong)', borderRadius: 12, padding: '18px 14px', color: 'var(--fg-2)', fontWeight: 600, fontSize: 13.5,
+      }}>
+        <Icon name="paperclip" size={18} />
+        {file ? file.name : 'Choose a file'}
+        <input type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }}
+          onChange={e => setFile(e.target.files?.[0] || null)} />
+      </label>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !file}>{busy ? 'Uploading…' : 'Upload'}</Btn></div>
     </Sheet>
   );
 }
@@ -275,10 +342,22 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
-  const handleAddUpdate = async (room) => {
+  const handleAddUpdate = async (room, files = []) => {
     if (!IS_LIVE) return;
-    await api.addUpdate(activeProjectId, room);
+    await api.uploadUpdate(activeProjectId, room, files);
     await loadDetail(activeProjectId);
+  };
+
+  const handleUploadDoc = async (file, opts) => {
+    if (!IS_LIVE) return;
+    await api.uploadDocument(activeProjectId, file, opts);
+    await loadDetail(activeProjectId);
+  };
+
+  const handleOpenDoc = async (doc) => {
+    if (!IS_LIVE || !doc.storage_path) return;
+    const url = await api.getDocumentUrl(doc.storage_path);
+    window.open(url, '_blank', 'noopener');
   };
 
   const handleAddMember = async (userId) => {
@@ -349,7 +428,8 @@ export default function App() {
         onAddProject={role === 'owner' ? () => setSheet('addProject') : null} />;
     }
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
-    if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)} />;
+    if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
+      onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
     if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
     if (tab === 'more')      return <MoreScreen role={role} profile={profile ? { name: profile.full_name || profile.name, initials: profile.initials } : null}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
@@ -373,6 +453,7 @@ export default function App() {
       {sheet === 'invite' && <InviteSheet onClose={() => setSheet(null)} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
+      {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
       {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} onAdd={handleAddUpdate} />}
     </div>

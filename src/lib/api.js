@@ -87,21 +87,48 @@ export async function listSchedule(projectId) {
 
 export async function listUpdates(projectId) {
   const { data, error } = await supabase.from('updates')
-    .select('*, update_photos(id)').eq('project_id', projectId)
+    .select('*, update_photos(storage_path, sort_order)').eq('project_id', projectId)
     .order('captured_on', { ascending: false });
   if (error) throw error;
-  return (data || []).map((u, i) => ({
-    id: u.id, room: u.room, isNew: u.is_new,
-    date: fmtDate(u.captured_on),
-    count: (u.update_photos || []).length,
-    tone: TONES[i % TONES.length],
-  }));
+  const rows = data || [];
+  const sorted = (u) => (u.update_photos || []).slice().sort((a, b) => a.sort_order - b.sort_order);
+  const firstPaths = rows.map(u => sorted(u)[0]?.storage_path).filter(Boolean);
+  const urlByPath = {};
+  if (firstPaths.length) {
+    const { data: signed } = await supabase.storage.from('update-photos').createSignedUrls(firstPaths, 3600);
+    (signed || []).forEach(s => { if (s.signedUrl) urlByPath[s.path] = s.signedUrl; });
+  }
+  return rows.map((u, i) => {
+    const first = sorted(u)[0]?.storage_path;
+    return {
+      id: u.id, room: u.room, isNew: u.is_new,
+      date: fmtDate(u.captured_on),
+      count: sorted(u).length,
+      tone: TONES[i % TONES.length],
+      thumb: first ? urlByPath[first] || null : null,
+    };
+  });
 }
 
-export async function addUpdate(projectId, room) {
-  const { error } = await supabase.from('updates')
-    .insert({ project_id: projectId, room, is_new: true });
+// Create an update and upload its photos to the update-photos bucket.
+// Path convention: <project_id>/<update_id>/<n>-<file> so storage RLS can
+// extract the project id from the first segment.
+export async function uploadUpdate(projectId, room, files = []) {
+  const { data: upd, error } = await supabase.from('updates')
+    .insert({ project_id: projectId, room, is_new: true }).select('id').single();
   if (error) throw error;
+  const list = Array.from(files);
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    const safe = f.name.replace(/[^\w.\-]+/g, '_');
+    const path = `${projectId}/${upd.id}/${i}-${safe}`;
+    const { error: ue } = await supabase.storage.from('update-photos').upload(path, f, { upsert: false });
+    if (ue) throw ue;
+    const { error: pe } = await supabase.from('update_photos')
+      .insert({ update_id: upd.id, storage_path: path, sort_order: i });
+    if (pe) throw pe;
+  }
+  return upd.id;
 }
 
 export async function listDocuments(projectId) {
@@ -110,11 +137,31 @@ export async function listDocuments(projectId) {
   if (error) throw error;
   const kindLabel = { invoice: 'PDF', plan: 'PDF', doc: 'PDF' };
   return (data || []).map(doc => ({
-    id: doc.id, name: doc.name, kind: doc.kind, ready: doc.ready,
+    id: doc.id, name: doc.name, kind: doc.kind, ready: doc.ready, storage_path: doc.storage_path,
     meta: doc.ready
       ? [kindLabel[doc.kind], fmtSize(doc.file_size), fmtDate(doc.issued_on)].filter(Boolean).join(' · ')
       : 'Available after handover',
   }));
+}
+
+// Upload a document file and register it. Path: <project_id>/<ts>-<file>.
+export async function uploadDocument(projectId, file, { name, kind = 'doc' } = {}) {
+  const safe = file.name.replace(/[^\w.\-]+/g, '_');
+  const path = `${projectId}/${Date.now()}-${safe}`;
+  const { error: ue } = await supabase.storage.from('documents').upload(path, file, { upsert: false });
+  if (ue) throw ue;
+  const { error } = await supabase.from('documents').insert({
+    project_id: projectId, name: name || file.name, kind,
+    file_size: file.size, storage_path: path, ready: true,
+    issued_on: new Date().toISOString().slice(0, 10),
+  });
+  if (error) throw error;
+}
+
+export async function getDocumentUrl(storagePath) {
+  const { data, error } = await supabase.storage.from('documents').createSignedUrl(storagePath, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 /* ------------------------------- fees --------------------------------- */
