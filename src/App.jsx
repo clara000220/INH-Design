@@ -246,12 +246,22 @@ function AddPhaseSheet({ onClose, onSave }) {
   const [pct, setPct] = useState(0);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [taskInput, setTaskInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const addTask = () => {
+    const t = taskInput.trim();
+    if (!t) return;
+    setTasks(ts => [...ts, t]);
+    setTaskInput('');
+  };
   const save = async () => {
     if (!name.trim()) return;
     setBusy(true); setErr(null);
-    try { await onSave({ name: name.trim(), status, pct: Math.round(pct), start_date: start, end_date: end }); onClose(); }
+    const pending = taskInput.trim();
+    const allTasks = pending ? [...tasks, pending] : tasks;
+    try { await onSave({ name: name.trim(), status, pct: Math.round(pct), start_date: start, end_date: end, tasks: allTasks }); onClose(); }
     catch (e) { setErr(e?.message || 'Could not add phase'); }
     finally { setBusy(false); }
   };
@@ -274,6 +284,35 @@ function AddPhaseSheet({ onClose, onSave }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1 }}><Field label="Start" icon="calendar" type="date" value={start} onChange={setStart} placeholder="" /></div>
           <div style={{ flex: 1 }}><Field label="End" icon="calendar" type="date" value={end} onChange={setEnd} placeholder="" /></div>
+        </div>
+        <div>
+          <label className="inh-label">Sub-tasks</label>
+          {tasks.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {tasks.map((t, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface-2)', borderRadius: 9, padding: '8px 10px' }}>
+                  <Icon name="circle" size={15} color="var(--fg-3)" />
+                  <span style={{ flex: 1, fontSize: 13.5 }}>{t}</span>
+                  <button onClick={() => setTasks(ts => ts.filter((_, j) => j !== i))} aria-label="Remove"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 2 }}>
+                    <Icon name="x" size={15} color="var(--fg-3)" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div className="inh-input" style={{ flex: 1 }}>
+              <span className="lead"><Icon name="check-circle" size={18} /></span>
+              <input value={taskInput} placeholder="Add a sub-task…"
+                onChange={e => setTaskInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTask(); } }} />
+            </div>
+            <button onClick={addTask} disabled={!taskInput.trim()} aria-label="Add sub-task"
+              style={{ flexShrink: 0, width: 46, borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', cursor: taskInput.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="plus" size={18} color="var(--fg-1)" />
+            </button>
+          </div>
         </div>
       </div>
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
@@ -470,6 +509,12 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleTogglePhaseTask = async (task) => {
+    if (!IS_LIVE) return;
+    await api.setPhaseTaskDone(task.id, !task.done);
+    await loadDetail(activeProjectId);
+  };
+
   const handleUploadDoc = async (file, opts) => {
     if (!IS_LIVE) return;
     await api.uploadDocument(activeProjectId, file, opts);
@@ -537,7 +582,8 @@ export default function App() {
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
-          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null} />;
+          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
+          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -556,7 +602,8 @@ export default function App() {
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
-          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null} />;
+          onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
+          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}

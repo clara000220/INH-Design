@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -146,6 +146,21 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                       <span className="meta">{p.status === 'completed' ? 'Done' : `${p.pct}% complete`}</span>
                     </div>
+                    {(p.tasks || []).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 10 }}>
+                        {p.tasks.map(t => (
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0' }}>
+                            <button
+                              onClick={() => CAN_EDIT(role) && onTogglePhaseTask && onTogglePhaseTask(t)}
+                              aria-label="Toggle sub-task"
+                              style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: CAN_EDIT(role) && onTogglePhaseTask ? 'pointer' : 'default' }}>
+                              <Icon name={t.done ? 'check-circle' : 'circle'} size={18} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />
+                            </button>
+                            <span style={{ fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {CAN_EDIT(role) && (onAddPhasePhoto || onMarkPhaseComplete) && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                         {onAddPhasePhoto && (

@@ -72,6 +72,18 @@ create table if not exists public.phases (
 );
 create index if not exists phases_project_idx on public.phases (project_id);
 
+create table if not exists public.phase_tasks (
+  id         uuid primary key default gen_random_uuid(),
+  phase_id   uuid not null references public.phases (id)   on delete cascade,
+  project_id uuid not null references public.projects (id) on delete cascade,
+  title      text not null,
+  done       boolean not null default false,
+  sort_order smallint not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists phase_tasks_phase_idx   on public.phase_tasks (phase_id);
+create index if not exists phase_tasks_project_idx on public.phase_tasks (project_id);
+
 create table if not exists public.schedule_items (
   id             uuid primary key default gen_random_uuid(),
   project_id     uuid not null references public.projects (id) on delete cascade,
@@ -176,6 +188,7 @@ alter table public.profiles        enable row level security;
 alter table public.projects        enable row level security;
 alter table public.project_members enable row level security;
 alter table public.phases          enable row level security;
+alter table public.phase_tasks     enable row level security;
 alter table public.schedule_items  enable row level security;
 alter table public.updates         enable row level security;
 alter table public.update_photos   enable row level security;
@@ -194,6 +207,8 @@ drop policy if exists project_members_select   on public.project_members;
 drop policy if exists project_members_owner_write on public.project_members;
 drop policy if exists phases_select            on public.phases;
 drop policy if exists phases_write             on public.phases;
+drop policy if exists phase_tasks_select       on public.phase_tasks;
+drop policy if exists phase_tasks_write        on public.phase_tasks;
 drop policy if exists schedule_select          on public.schedule_items;
 drop policy if exists schedule_write           on public.schedule_items;
 drop policy if exists updates_select           on public.updates;
@@ -227,6 +242,9 @@ create policy project_members_owner_write on public.project_members for all usin
 
 create policy phases_select on public.phases for select using (public.is_project_member(project_id));
 create policy phases_write  on public.phases for all using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
+
+create policy phase_tasks_select on public.phase_tasks for select using (public.is_project_member(project_id));
+create policy phase_tasks_write  on public.phase_tasks for all using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));
 
 create policy schedule_select on public.schedule_items for select using (public.is_project_member(project_id));
 create policy schedule_write  on public.schedule_items for all using (public.can_edit_project(project_id)) with check (public.can_edit_project(project_id));

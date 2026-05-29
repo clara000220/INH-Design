@@ -63,22 +63,50 @@ export async function updateProjectProgress(id, progress) {
 /* --------------------------- project detail --------------------------- */
 export async function listPhases(projectId) {
   const { data, error } = await supabase.from('phases')
-    .select('*').eq('project_id', projectId).order('sort_order', { ascending: true });
+    .select('*, phase_tasks(id, title, done, sort_order)')
+    .eq('project_id', projectId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data || []).map(p => ({
     id: p.id, name: p.name, status: p.status, pct: p.pct,
     dates: fmtRange(p.start_date, p.end_date),
+    tasks: (p.phase_tasks || [])
+      .slice().sort((a, b) => a.sort_order - b.sort_order)
+      .map(t => ({ id: t.id, title: t.title, done: t.done })),
   }));
 }
 
-export async function addPhase(projectId, { name, status = 'upcoming', pct = 0, start_date, end_date }) {
+export async function addPhase(projectId, { name, status = 'upcoming', pct = 0, start_date, end_date, tasks = [] }) {
   const { data: rows } = await supabase.from('phases')
     .select('sort_order').eq('project_id', projectId).order('sort_order', { ascending: false }).limit(1);
   const sort_order = (rows?.[0]?.sort_order ?? 0) + 1;
-  const { error } = await supabase.from('phases').insert({
+  const { data: phase, error } = await supabase.from('phases').insert({
     project_id: projectId, name, status, pct,
     start_date: start_date || null, end_date: end_date || null, sort_order,
-  });
+  }).select('id').single();
+  if (error) throw error;
+  const clean = (tasks || []).map(t => (typeof t === 'string' ? t : t?.title)).map(s => (s || '').trim()).filter(Boolean);
+  if (clean.length) {
+    const { error: te } = await supabase.from('phase_tasks').insert(
+      clean.map((title, i) => ({ phase_id: phase.id, project_id: projectId, title, sort_order: i }))
+    );
+    if (te) throw te;
+  }
+  return phase.id;
+}
+
+// Add a single sub-task to an existing phase.
+export async function addPhaseTask(phaseId, projectId, title) {
+  const { data: rows } = await supabase.from('phase_tasks')
+    .select('sort_order').eq('phase_id', phaseId).order('sort_order', { ascending: false }).limit(1);
+  const sort_order = (rows?.[0]?.sort_order ?? -1) + 1;
+  const { error } = await supabase.from('phase_tasks')
+    .insert({ phase_id: phaseId, project_id: projectId, title: title.trim(), sort_order });
+  if (error) throw error;
+}
+
+// Tick / untick a phase sub-task.
+export async function setPhaseTaskDone(id, done) {
+  const { error } = await supabase.from('phase_tasks').update({ done }).eq('id', id);
   if (error) throw error;
 }
 
