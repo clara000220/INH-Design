@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -149,14 +149,19 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     {(p.tasks || []).length > 0 && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 10 }}>
                         {p.tasks.map(t => (
-                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0' }}>
+                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 0' }}>
                             <button
                               onClick={() => CAN_EDIT(role) && onTogglePhaseTask && onTogglePhaseTask(t)}
                               aria-label="Toggle sub-task"
                               style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: CAN_EDIT(role) && onTogglePhaseTask ? 'pointer' : 'default' }}>
                               <Icon name={t.done ? 'check-circle' : 'circle'} size={18} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />
                             </button>
-                            <span style={{ fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                            <button onClick={() => onOpenTask && onOpenTask(t)}
+                              style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: onOpenTask ? 'pointer' : 'default' }}>
+                              <span style={{ flex: 1, fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
+                              {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
+                              {onOpenTask && <Icon name="chevron-right" size={15} color="var(--fg-3)" />}
+                            </button>
                           </div>
                         ))}
                       </div>

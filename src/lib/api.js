@@ -63,7 +63,7 @@ export async function updateProjectProgress(id, progress) {
 /* --------------------------- project detail --------------------------- */
 export async function listPhases(projectId) {
   const { data, error } = await supabase.from('phases')
-    .select('*, phase_tasks(id, title, done, sort_order)')
+    .select('*, phase_tasks(id, title, note, done, sort_order)')
     .eq('project_id', projectId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data || []).map(p => ({
@@ -71,7 +71,7 @@ export async function listPhases(projectId) {
     dates: fmtRange(p.start_date, p.end_date),
     tasks: (p.phase_tasks || [])
       .slice().sort((a, b) => a.sort_order - b.sort_order)
-      .map(t => ({ id: t.id, title: t.title, done: t.done })),
+      .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done })),
   }));
 }
 
@@ -108,6 +108,47 @@ export async function addPhaseTask(phaseId, projectId, title) {
 export async function setPhaseTaskDone(id, done) {
   const { error } = await supabase.from('phase_tasks').update({ done }).eq('id', id);
   if (error) throw error;
+}
+
+// Save the free-text remark on a sub-task.
+export async function setPhaseTaskNote(id, note) {
+  const { error } = await supabase.from('phase_tasks').update({ note: note || null }).eq('id', id);
+  if (error) throw error;
+}
+
+// Attach photos to a specific sub-task. Creates an update (tagged with task_id)
+// so the photos also show in the Updates feed, and returns nothing.
+export async function uploadTaskPhotos(projectId, taskId, room, files = []) {
+  const { data: upd, error } = await supabase.from('updates')
+    .insert({ project_id: projectId, room, task_id: taskId, is_new: true }).select('id').single();
+  if (error) throw error;
+  const list = Array.from(files);
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    const safe = f.name.replace(/[^\w.\-]+/g, '_');
+    const path = `${projectId}/${upd.id}/${i}-${safe}`;
+    const { error: ue } = await supabase.storage.from('update-photos').upload(path, f, { upsert: false });
+    if (ue) throw ue;
+    const { error: pe } = await supabase.from('update_photos')
+      .insert({ update_id: upd.id, storage_path: path, sort_order: i });
+    if (pe) throw pe;
+  }
+  return upd.id;
+}
+
+// All photos attached to a sub-task, newest first, as signed URLs.
+export async function listTaskPhotos(taskId) {
+  const { data, error } = await supabase.from('updates')
+    .select('id, captured_on, update_photos(storage_path, sort_order)')
+    .eq('task_id', taskId).order('captured_on', { ascending: false });
+  if (error) throw error;
+  const paths = [];
+  (data || []).forEach(u => (u.update_photos || [])
+    .slice().sort((a, b) => a.sort_order - b.sort_order)
+    .forEach(p => paths.push(p.storage_path)));
+  if (!paths.length) return [];
+  const { data: signed } = await supabase.storage.from('update-photos').createSignedUrls(paths, 3600);
+  return (signed || []).map(s => s.signedUrl).filter(Boolean);
 }
 
 // Update an existing phase (e.g. mark complete, change pct/status/name/dates).

@@ -77,6 +77,7 @@ create table if not exists public.phase_tasks (
   phase_id   uuid not null references public.phases (id)   on delete cascade,
   project_id uuid not null references public.projects (id) on delete cascade,
   title      text not null,
+  note       text,
   done       boolean not null default false,
   sort_order smallint not null default 0,
   created_at timestamptz not null default now()
@@ -99,10 +100,12 @@ create table if not exists public.updates (
   room        text not null,
   captured_on date not null default current_date,
   is_new      boolean not null default true,
+  task_id     uuid references public.phase_tasks (id) on delete set null,
   created_by  uuid references public.profiles (id),
   created_at  timestamptz not null default now()
 );
 create index if not exists updates_project_idx on public.updates (project_id);
+create index if not exists updates_task_idx on public.updates (task_id);
 
 create table if not exists public.update_photos (
   id           uuid primary key default gen_random_uuid(),

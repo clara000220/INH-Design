@@ -78,6 +78,104 @@ function PhotoSheet({ photo, onClose, onAdd }) {
   );
 }
 
+// Detail view for a sub-task: complete toggle, remark, and its photos.
+function TaskDetailSheet({ task, projectId, onClose, onChanged }) {
+  const [done, setDone] = useState(task.done);
+  const [note, setNote] = useState(task.note || '');
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(IS_LIVE);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    if (!IS_LIVE) return;
+    let active = true;
+    api.listTaskPhotos(task.id)
+      .then(urls => { if (active) setPhotos(urls); })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [task.id]);
+
+  const toggle = async () => {
+    const next = !done;
+    setDone(next);
+    if (!IS_LIVE) return;
+    try { await api.setPhaseTaskDone(task.id, next); onChanged && onChanged(); }
+    catch (e) { setErr(e?.message || 'Could not update'); setDone(!next); }
+  };
+  const saveNote = async () => {
+    if (!IS_LIVE) return;
+    setBusy(true); setErr(null);
+    try { await api.setPhaseTaskNote(task.id, note); onChanged && onChanged(); }
+    catch (e) { setErr(e?.message || 'Could not save remark'); }
+    finally { setBusy(false); }
+  };
+  const addPhotos = async (files) => {
+    const list = Array.from(files || []);
+    if (!IS_LIVE || !list.length) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.uploadTaskPhotos(projectId, task.id, task.title, list);
+      const urls = await api.listTaskPhotos(task.id);
+      setPhotos(urls);
+      onChanged && onChanged();
+    } catch (e) { setErr(e?.message || 'Upload failed'); }
+    finally { setBusy(false); }
+  };
+
+  const canEdit = !!onChanged; // App only passes onChanged for editor roles
+  return (
+    <Sheet title="Sub-task" onClose={onClose}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16 }}>
+        <button onClick={canEdit ? toggle : undefined} aria-label="Toggle complete"
+          style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: canEdit ? 'pointer' : 'default' }}>
+          <Icon name={done ? 'check-circle' : 'circle'} size={26} color={done ? 'var(--success)' : 'var(--fg-3)'} stroke={done ? 2.2 : 1.8} />
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--fg-3)' : 'var(--fg-1)' }}>{task.title}</div>
+          <div className="inh-row__sub">{done ? 'Completed' : 'In progress'}</div>
+        </div>
+        <Pill status={done ? 'completed' : 'progress'} />
+      </div>
+
+      <label className="inh-label">Remark</label>
+      <textarea value={note} onChange={e => setNote(e.target.value)} disabled={!canEdit}
+        placeholder={canEdit ? 'Add a note about this sub-task…' : 'No remark'} rows={3}
+        style={{ width: '100%', resize: 'vertical', borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+      {canEdit && note !== (task.note || '') && (
+        <div style={{ marginTop: 8 }}><Btn variant="ghost" size="sm" icon="check" onClick={saveNote} disabled={busy}>{busy ? 'Saving…' : 'Save remark'}</Btn></div>
+      )}
+
+      <label className="inh-label" style={{ marginTop: 16 }}>Photos</label>
+      {loading ? (
+        <p className="body-2">Loading…</p>
+      ) : photos.length ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+          {photos.map((url, i) => (
+            <div key={i} style={{ aspectRatio: '1', borderRadius: 10, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', background: 'var(--surface-2)' }} />
+          ))}
+        </div>
+      ) : (
+        <p className="body-2" style={{ marginBottom: 4 }}>No photos yet.</p>
+      )}
+
+      {canEdit && (
+        <label style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', marginTop: 10,
+          border: '1.5px dashed var(--border-strong)', borderRadius: 12, padding: '14px', color: 'var(--fg-2)', fontWeight: 600, fontSize: 13.5,
+        }}>
+          <Icon name="camera" size={18} /> {busy ? 'Working…' : 'Add photos'}
+          <input type="file" accept="image/*" multiple style={{ display: 'none' }} disabled={busy}
+            onChange={e => addPhotos(e.target.files)} />
+        </label>
+      )}
+
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+    </Sheet>
+  );
+}
+
 function InviteSheet({ onClose }) {
   const [r, setR] = useState('homeowner');
   return (
@@ -352,6 +450,7 @@ export default function App() {
   const [stack, setStack] = useState([]);
   const [sheet, setSheet] = useState(null);
   const [photo, setPhoto] = useState(null);
+  const [task, setTask] = useState(null);
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -447,7 +546,7 @@ export default function App() {
     setAuth('login');
   };
 
-  const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); };
+  const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); setTask(null); };
 
   // ---- interactive feature handlers ----
   const handleEditName = async (name) => {
@@ -583,7 +682,8 @@ export default function App() {
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
-          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null} />;
+          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
+          onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
@@ -603,7 +703,8 @@ export default function App() {
           onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
-          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null} />;
+          onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
+          onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}
@@ -640,6 +741,8 @@ export default function App() {
       {sheet === 'addPhase' && <AddPhaseSheet onClose={() => setSheet(null)} onSave={handleAddPhase} />}
       {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
       {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} onAdd={handleAddUpdate} />}
+      {task && <TaskDetailSheet task={task} projectId={activeProjectId} onClose={() => setTask(null)}
+        onChanged={CAN_EDIT(role) ? (() => loadDetail(activeProjectId)) : null} />}
     </div>
   );
 
