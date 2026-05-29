@@ -1,36 +1,14 @@
 /* INH — App shell, routing, role switching */
 import { useState, useEffect } from 'react';
 import { Icon } from './components/Icon.jsx';
-import { Btn, Pill, AppHeader, TabBar, Sheet } from './components/primitives.jsx';
-import { IOSDevice } from './device/IOSDevice.jsx';
+import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
+import { supabase, IS_LIVE } from './lib/supabase.js';
 import { Login, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen } from './screens/core/CoreScreens.jsx';
 import {
   ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen,
 } from './screens/owner/OwnerScreens.jsx';
-
-/* Scales the fixed 402×874 device to fit the available stage */
-function DeviceStage({ children }) {
-  const [scale, setScale] = useState(1);
-  useEffect(() => {
-    const fit = () => {
-      const availH = window.innerHeight - 96;   // demo bar + padding
-      const availW = window.innerWidth - 32;
-      setScale(Math.min(1, availH / 874, availW / 402));
-    };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, []);
-  return (
-    <div style={{ height: 874 * scale, width: 402 * scale, position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function PhotoSheet({ photo, onClose }) {
   if (photo.add) {
@@ -103,7 +81,7 @@ function PropertySheet({ role, onClose }) {
 
 export default function App() {
   const [auth, setAuth] = useState('login');   // login | forgot | in
-  const [role, setRole] = useState('owner');
+  const [role, setRole] = useState(IS_LIVE ? null : 'owner');
   const [tab, setTab] = useState('home');
   const [stack, setStack] = useState([]);
   const [sheet, setSheet] = useState(null);
@@ -114,7 +92,40 @@ export default function App() {
   const pop = () => setStack(s => s.slice(0, -1));
   const top = stack[stack.length - 1];
 
-  const signIn = () => { setAuth('in'); setRole(role); setTab('home'); setStack([]); };
+  // Real auth: restore any persisted session and react to sign in/out.
+  useEffect(() => {
+    if (!IS_LIVE) return;
+    let active = true;
+    const apply = async (session) => {
+      if (!session) { if (active) { setAuth('login'); setRole(null); } return; }
+      const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+      if (!active) return;
+      setRole(data?.role || 'homeowner');
+      setTab('home');
+      setStack([]);
+      setAuth('in');
+    };
+    supabase.auth.getSession().then(({ data }) => apply(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => apply(session));
+    return () => { active = false; sub.subscription.unsubscribe(); };
+  }, []);
+
+  // Passed to the Login screen. Throws on failure so Login can show the error.
+  const signIn = async (email, password) => {
+    if (!IS_LIVE) { setRole(role || 'owner'); setTab('home'); setStack([]); setAuth('in'); return; }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    // onAuthStateChange handles loading the role and entering the app.
+  };
+
+  const signOut = async () => {
+    if (IS_LIVE) await supabase.auth.signOut();
+    setRole(IS_LIVE ? null : 'owner');
+    setTab('home');
+    setStack([]);
+    setAuth('login');
+  };
+
   const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); };
 
   // ---- header config ----
@@ -156,19 +167,22 @@ export default function App() {
     if (tab === 'updates')   return <UpdatesScreen role={role} onPhoto={p => setPhoto(p)} />;
     if (tab === 'documents') return <DocumentsScreen role={role} />;
     if (tab === 'fees')      return <FeesScreen onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
-    if (tab === 'more')      return <MoreScreen role={role} onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project })} onSignOut={() => { setAuth('login'); }} />;
+    if (tab === 'more')      return <MoreScreen role={role} onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project })} onSignOut={signOut} />;
     return null;
   };
 
   // ---- render ----
   let device;
-  if (auth === 'login') device = <Login onSignIn={signIn} onForgot={() => setAuth('forgot')} />;
+  if (auth === 'login') device = <Login onSignIn={signIn} onForgot={() => setAuth('forgot')} live={IS_LIVE} />;
   else if (auth === 'forgot') device = <ForgotFlow onBack={() => setAuth('login')} onDone={() => setAuth('login')} />;
   else device = (
     <div className="inh-app">
-      {header()}
-      {body()}
-      <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
+      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} />
+      <div className="inh-main">
+        {header()}
+        {body()}
+        <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
+      </div>
       {sheet === 'property' && <PropertySheet role={role} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <InviteSheet onClose={() => setSheet(null)} />}
       {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} />}
@@ -176,24 +190,25 @@ export default function App() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--canvas)' }}>
-      {/* demo identity rail */}
-      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '12px 16px', flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: '#fff' }}>
-        <img src="/assets/inh-appicon.png" alt="INH" style={{ width: 26, height: 26, borderRadius: 7 }} />
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--fg-2)', marginRight: 4 }}>Viewing as</span>
-        {['owner', 'admin', 'homeowner'].map(r => (
-          <button key={r} onClick={() => { switchRole(r); if (auth !== 'in') setAuth('in'); }}
-            className={'inh-chip' + (role === r && auth === 'in' ? ' active' : '')}
-            style={{ textTransform: 'capitalize', fontSize: 12.5, padding: '6px 13px' }}>{r}</button>
-        ))}
-        <button onClick={() => setAuth('login')} className="inh-chip" style={{ fontSize: 12.5, padding: '6px 13px', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <Icon name="lock" size={13} /> Login
-        </button>
-      </div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <DeviceStage>
-          <IOSDevice>{device}</IOSDevice>
-        </DeviceStage>
+    <div className="inh-root">
+      {/* demo identity rail — only in demo mode (no Supabase keys). With real
+          auth the role comes from the signed-in user's profile. */}
+      {!IS_LIVE && (
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '10px 16px', flexWrap: 'wrap', borderBottom: '1px solid var(--border)', background: '#fff' }}>
+          <img src="/assets/inh-appicon.png" alt="INH" style={{ width: 26, height: 26, borderRadius: 7 }} />
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 13, color: 'var(--fg-2)', marginRight: 4 }}>Viewing as</span>
+          {['owner', 'admin', 'homeowner'].map(r => (
+            <button key={r} onClick={() => { switchRole(r); if (auth !== 'in') setAuth('in'); }}
+              className={'inh-chip' + (role === r && auth === 'in' ? ' active' : '')}
+              style={{ textTransform: 'capitalize', fontSize: 12.5, padding: '6px 13px' }}>{r}</button>
+          ))}
+          <button onClick={() => setAuth('login')} className="inh-chip" style={{ fontSize: 12.5, padding: '6px 13px', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="lock" size={13} /> Login
+          </button>
+        </div>
+      )}
+      <div className="inh-stage">
+        {device}
       </div>
     </div>
   );

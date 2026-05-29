@@ -10,10 +10,11 @@ export function ProjectsScreen({ role, onOpenProject }) {
   const list = role === 'admin' ? INH_DATA.projects.slice(0, 2) : INH_DATA.projects;
   return (
     <div className="inh-scroll">
-      <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="inh-pad">
         {role === 'admin' && (
-          <p className="body-2" style={{ marginBottom: 2 }}>Showing the {list.length} projects assigned to you.</p>
+          <p className="body-2" style={{ marginBottom: 12 }}>Showing the {list.length} projects assigned to you.</p>
         )}
+        <div className="inh-cardgrid">
         {list.map(p => (
           <div key={p.id} className="inh-card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => onOpenProject(p)}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -30,6 +31,7 @@ export function ProjectsScreen({ role, onOpenProject }) {
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
@@ -70,7 +72,7 @@ export function FeesScreen({ onOpenProject }) {
           {chips.map(c => <button key={c} className={'inh-chip' + (filter === c ? ' active' : '')} onClick={() => setFilter(c)}>{c}</button>)}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="inh-cardgrid">
           {D.projects.map(p => (
             <div key={p.id} className="inh-card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => onOpenProject(p)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

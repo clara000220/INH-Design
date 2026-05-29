@@ -108,6 +108,42 @@ export const TAB_DEFS = {
   ],
 };
 
+/* Desktop sidebar — replaces the bottom tab bar at >=960px */
+export function Sidebar({ role, active, onChange, onSignOut }) {
+  const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
+  const meta = INH_DATA.roleMeta[role];
+  return (
+    <aside className="inh-sidebar">
+      <div className="inh-sidebar__brand">
+        <img src="/assets/inh-appicon.png" alt="INH" />
+        <span>INH</span>
+      </div>
+      <nav className="inh-sidebar__nav">
+        {tabs.map(t => (
+          <button key={t.id} className={'inh-navitem' + (active === t.id ? ' active' : '')} onClick={() => onChange(t.id)}>
+            <Icon name={t.icon} size={20} stroke={active === t.id ? 2.2 : 2} />
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
+      {meta && (
+        <div className="inh-sidebar__foot">
+          <div className="inh-avatar">{meta.initials}</div>
+          <div className="inh-sidebar__who">
+            <div className="inh-sidebar__name">{meta.person}</div>
+            <div className="inh-sidebar__role">{meta.label}</div>
+          </div>
+          {onSignOut && (
+            <button className="inh-iconbtn" style={{ width: 34, height: 34 }} onClick={onSignOut} aria-label="Sign out">
+              <Icon name="log-out" size={16} />
+            </button>
+          )}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 export function TabBar({ role, active, onChange }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   return (

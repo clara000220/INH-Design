@@ -9,9 +9,9 @@ export function Logo({ height = 54 }) {
 
 export function AuthShell({ children }) {
   return (
-    <div className="inh-app" style={{ background: '#fff' }}>
+    <div className="inh-app inh-auth" style={{ background: '#fff' }}>
       <div className="inh-scroll">
-        <div style={{ padding: '64px 26px 30px', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="inh-authwrap" style={{ padding: '48px 26px 30px', minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
           {children}
         </div>
       </div>
@@ -43,16 +43,24 @@ export function Field({ label, icon, type = 'text', value, onChange, placeholder
 }
 
 /* ---------- Login ---------- */
-export function Login({ onSignIn, onForgot }) {
-  const [email, setEmail] = useState('boss@inh.com.my');
-  const [pw, setPw] = useState('renovate2026');
+export function Login({ onSignIn, onForgot, live }) {
+  const [email, setEmail] = useState(live ? '' : 'boss@inh.com.my');
+  const [pw, setPw] = useState(live ? '' : 'renovate2026');
   const [remember, setRemember] = useState(true);
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const submit = () => {
-    if (!pw || pw.length < 4) { setErr(true); return; }
-    setErr(false);
-    onSignIn(email);
+  const submit = async () => {
+    if (!email || !pw) { setErr('Enter your email and password'); return; }
+    setErr(null);
+    setBusy(true);
+    try {
+      await onSignIn(email, pw);
+    } catch (e) {
+      setErr(e?.message || 'Email or password is incorrect');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -64,7 +72,7 @@ export function Login({ onSignIn, onForgot }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Field label="Email or phone" icon="mail" value={email} onChange={setEmail} placeholder="you@email.com" />
         <Field label="Password" icon="lock" password value={pw} onChange={setPw} placeholder="Enter password"
-          error={err ? 'Email or password is incorrect' : null} />
+          error={err} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 0 22px' }}>
@@ -84,7 +92,7 @@ export function Login({ onSignIn, onForgot }) {
         <button className="inh-link" onClick={onForgot}>Forgot password?</button>
       </div>
 
-      <Btn variant="primary" onClick={submit}>Sign in</Btn>
+      <Btn variant="primary" onClick={submit} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
 
       <div style={{ flex: 1 }} />
       <div style={{ textAlign: 'center', marginTop: 32 }}>
