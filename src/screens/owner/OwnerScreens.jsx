@@ -249,7 +249,7 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, me
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
-        <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>{t('Invite user')}</Btn>
+        <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>{t('Add account')}</Btn>
         <div className="inh-hero" style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Icon name="users" size={24} color="var(--inh-lime)" />

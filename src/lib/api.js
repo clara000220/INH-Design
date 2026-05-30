@@ -358,6 +358,22 @@ export async function listUsers() {
   }));
 }
 
+// Owner/admin: create a client account directly (temp password, no email
+// confirmation). Runs through the admin-create-user Edge Function, which holds
+// the service_role key server-side and re-checks the caller's role.
+export async function adminCreateUser({ email, password, fullName, role = 'homeowner' }) {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+    body: { email, password, full_name: fullName, role },
+  });
+  if (error) {
+    let msg = error.message || 'Could not create account';
+    try { const ctx = await error.context?.json?.(); if (ctx?.error) msg = ctx.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 // Owner-only: change a user's role. RLS (profiles_owner_all) + the
 // guard_profile_role trigger enforce that only an owner can do this server-side.
 export async function setUserRole(userId, role) {

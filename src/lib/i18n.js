@@ -48,6 +48,7 @@ const MS = {
   'Sign out': 'Log Keluar',
   // Users screen
   'Invite user': 'Jemput Pengguna',
+  'Add account': 'Tambah Akaun',
   'Change role': 'Tukar Peranan',
   'registered': 'berdaftar',
   'user': 'pengguna',
@@ -87,6 +88,7 @@ const ZH = {
   'Sign out': '退出登录',
   // Users screen
   'Invite user': '邀请用户',
+  'Add account': '添加账户',
   'Change role': '更改角色',
   'registered': '已注册',
   'user': '位用户',

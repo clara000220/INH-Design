@@ -177,24 +177,82 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged }) {
   );
 }
 
-function InviteSheet({ onClose }) {
-  const [r, setR] = useState('homeowner');
+function genPassword() {
+  // Friendly temporary password: e.g. "Inh-4827-quay". No ambiguous chars.
+  const words = ['quay', 'lime', 'teak', 'arch', 'bolt', 'sill', 'jade', 'reef', 'pine', 'oryx'];
+  const w = words[Math.floor(Math.random() * words.length)];
+  const n = String(1000 + Math.floor(Math.random() * 9000));
+  return `Inh-${n}-${w}`;
+}
+
+function AddAccountSheet({ onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState(genPassword());
+  const [role, setRole] = useState('homeowner');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(null);   // { email, pw } once created
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const ready = EMAIL_RE.test(email.trim()) && pw.length >= 8;
+
+  const create = async () => {
+    if (!ready) { setErr('Enter a valid email and an 8+ character password'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await onCreate({ email: email.trim(), password: pw, fullName: name.trim(), role });
+      setDone({ email: email.trim(), pw });
+    } catch (e) { setErr(e?.message || 'Could not create account'); }
+    finally { setBusy(false); }
+  };
+
+  if (done) return (
+    <Sheet title="Account created" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: 16 }}>
+        <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--success-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+          <Icon name="check-circle" size={32} color="var(--success)" />
+        </div>
+        <p className="body-2">The account is active immediately — no email confirmation needed. Share these sign-in details with your client.</p>
+      </div>
+      <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div><div className="meta">Email</div><div style={{ fontWeight: 700, fontSize: 14.5 }}>{done.email}</div></div>
+        <div><div className="meta">Temporary password</div><div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16, letterSpacing: 0.5 }}>{done.pw}</div></div>
+      </div>
+      <p className="meta" style={{ marginTop: 10 }}>Tip: ask them to change it after first sign-in via Forgot password.</p>
+      <div style={{ marginTop: 16 }}><Btn variant="primary" icon="check" onClick={onClose}>Done</Btn></div>
+    </Sheet>
+  );
+
   return (
-    <Sheet title="Invite user" onClose={onClose}>
-      <p className="body-2" style={{ marginBottom: 16 }}>We'll email a first-time setup link. INH never sets passwords on a user's behalf.</p>
+    <Sheet title="Add account" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 16 }}>Create a client account directly with a temporary password. No email confirmation required.</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Name" icon="user" value="" onChange={() => {}} placeholder="Full name" />
-        <Field label="Email or phone" icon="mail" value="" onChange={() => {}} placeholder="you@email.com" />
+        <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Client's name" autoFocus />
+        <Field label="Email" icon="mail" type="email" value={email} onChange={setEmail} placeholder="client@email.com" />
         <div>
-          <label className="inh-label">Initial role</label>
+          <label className="inh-label">Temporary password</label>
           <div style={{ display: 'flex', gap: 8 }}>
-            {['admin', 'homeowner'].map(role => (
-              <button key={role} onClick={() => setR(role)} className={'inh-chip' + (r === role ? ' active' : '')} style={{ flex: 1, textTransform: 'capitalize' }}>{role}</button>
+            <div className="inh-input" style={{ flex: 1 }}>
+              <span className="lead"><Icon name="lock" size={18} /></span>
+              <input value={pw} onChange={e => setPw(e.target.value)} placeholder="At least 8 characters" />
+            </div>
+            <button onClick={() => setPw(genPassword())} aria-label="Generate password"
+              style={{ flexShrink: 0, width: 46, borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="settings" size={18} color="var(--fg-1)" />
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="inh-label">Role</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['admin', 'homeowner'].map(r => (
+              <button key={r} onClick={() => setRole(r)} className={'inh-chip' + (role === r ? ' active' : '')} style={{ flex: 1, textTransform: 'capitalize' }}>{r}</button>
             ))}
           </div>
         </div>
       </div>
-      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="user-plus" onClick={onClose}>Send invite</Btn></div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="user-plus" onClick={create} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create account'}</Btn></div>
     </Sheet>
   );
 }
@@ -624,6 +682,12 @@ export default function App() {
     await reloadTop();
   };
 
+  const handleAddAccount = async ({ email, password, fullName, role }) => {
+    if (!IS_LIVE) return;
+    await api.adminCreateUser({ email, password, fullName, role });
+    await reloadTop();
+  };
+
   const handleAddProject = async (form) => {
     if (!IS_LIVE) {
       setProjects(ps => [...ps, {
@@ -836,7 +900,7 @@ export default function App() {
         <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
       </div>
       {sheet === 'property' && <PropertySheet role={role} projects={projects} onClose={() => setSheet(null)} />}
-      {sheet === 'invite' && <InviteSheet onClose={() => setSheet(null)} />}
+      {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
