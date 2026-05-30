@@ -229,8 +229,23 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 }
 
 /* =================== USERS DIRECTORY (owner, under More) =================== */
-export function UsersScreen({ users = INH_DATA.users, onInvite }) {
+const ROLE_OPTIONS = ['owner', 'admin', 'homeowner'];
+
+export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, meId }) {
   const count = users.length;
+  const [edit, setEdit] = useState(null);   // user being edited
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const canEdit = !!onChangeRole;           // live + owner
+
+  const apply = async (role) => {
+    if (!edit || role === edit.role) { setEdit(null); return; }
+    setBusy(true); setErr(null);
+    try { await onChangeRole(edit.id, role); setEdit(null); }
+    catch (e) { setErr(e?.message || 'Could not change role'); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
@@ -245,21 +260,60 @@ export function UsersScreen({ users = INH_DATA.users, onInvite }) {
           </div>
         </div>
         <div className="inh-card" style={{ overflow: 'hidden' }}>
-          {users.map(u => (
-            <div key={u.id} className="inh-row">
-              <Avatar initials={u.initials} light={u.role !== 'owner'} />
-              <div className="inh-row__main">
-                <div className="inh-row__title" style={{ fontSize: 14.5 }}>{u.name}</div>
-                <div className="inh-row__sub">{u.contact} · {u.projects} {u.projects === 1 ? 'project' : 'projects'}</div>
+          {users.map(u => {
+            const isMe = u.id === meId;
+            const tappable = canEdit && !isMe;
+            return (
+              <div key={u.id} className="inh-row" style={{ cursor: tappable ? 'pointer' : 'default' }}
+                onClick={tappable ? () => { setErr(null); setEdit(u); } : undefined}>
+                <Avatar initials={u.initials} light={u.role !== 'owner'} />
+                <div className="inh-row__main">
+                  <div className="inh-row__title" style={{ fontSize: 14.5 }}>{u.name}{isMe && <span className="inh-row__sub" style={{ marginLeft: 6 }}>(you)</span>}</div>
+                  <div className="inh-row__sub">{u.contact} · {u.projects} {u.projects === 1 ? 'project' : 'projects'}</div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <RoleBadge role={u.role} />
+                  {tappable && <Icon name="chevron-right" size={16} color="var(--fg-3)" />}
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                <RoleBadge role={u.role} />
-                <Icon name="chevron-right" size={16} color="var(--fg-3)" />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        {canEdit && <p className="meta" style={{ marginTop: 10 }}>Tap a user to change their role. You can't change your own.</p>}
       </div>
+
+      {edit && (
+        <Sheet title={t('Change role')} onClose={() => setEdit(null)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <Avatar initials={edit.initials} light={edit.role !== 'owner'} />
+            <div>
+              <div className="inh-row__title" style={{ fontSize: 15 }}>{edit.name}</div>
+              <div className="inh-row__sub">{edit.contact}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ROLE_OPTIONS.map(r => {
+              const meta = INH_DATA.roleMeta[r];
+              const active = edit.role === r;
+              return (
+                <button key={r} onClick={() => apply(r)} disabled={busy} className="inh-row"
+                  style={{ borderRadius: 12, border: '1px solid var(--border)', background: active ? 'var(--inh-lime-soft)' : 'transparent', cursor: busy ? 'default' : 'pointer', textAlign: 'left' }}>
+                  <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}>
+                    <Icon name={r === 'owner' ? 'shield-check' : r === 'admin' ? 'briefcase' : 'home'} size={19} color="var(--inh-charcoal)" />
+                  </div>
+                  <div className="inh-row__main">
+                    <div className="inh-row__title" style={{ fontSize: 14.5 }}>{meta.label}</div>
+                    <div className="inh-row__sub">{r === 'owner' ? 'Full access, incl. Fees Release' : r === 'admin' ? 'Manage assigned projects' : 'Views their own project'}</div>
+                  </div>
+                  {active ? <Icon name="check" size={18} color="var(--inh-charcoal)" stroke={2.6} /> : <span style={{ width: 18 }} />}
+                </button>
+              );
+            })}
+          </div>
+          {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err}</p>}
+          {busy && <p className="meta" style={{ marginTop: 10 }}>Saving…</p>}
+        </Sheet>
+      )}
     </div>
   );
 }

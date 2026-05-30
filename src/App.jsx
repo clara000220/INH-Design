@@ -618,6 +618,12 @@ export default function App() {
     await reloadTop();
   };
 
+  const handleChangeRole = async (userId, role) => {
+    if (!IS_LIVE) return;
+    await api.setUserRole(userId, role);
+    await reloadTop();
+  };
+
   const handleAddProject = async (form) => {
     if (!IS_LIVE) {
       setProjects(ps => [...ps, {
@@ -752,7 +758,8 @@ export default function App() {
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
       if (top.type === 'users')
-        return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')} />;
+        return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
+          onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
       if (top.type === 'team')
         return <TeamScreen project={top.project} members={live(detail?.members)} homeowners={homeowners}
           onAddMember={handleAddMember} onRemoveMember={handleRemoveMember} />;

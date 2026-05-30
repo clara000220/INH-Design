@@ -341,6 +341,14 @@ export async function listUsers() {
   }));
 }
 
+// Owner-only: change a user's role. RLS (profiles_owner_all) + the
+// guard_profile_role trigger enforce that only an owner can do this server-side.
+export async function setUserRole(userId, role) {
+  const { error } = await supabase.from('profiles')
+    .update({ role }).eq('id', userId);
+  if (error) throw error;
+}
+
 export async function listHomeowners() {
   const { data, error } = await supabase.from('profiles')
     .select('id, full_name, initials').eq('role', 'homeowner').order('full_name');
