@@ -213,6 +213,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                           <button onClick={() => onOpenTask && onOpenTask(t)}
                             style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: onOpenTask ? 'pointer' : 'default', minWidth: 0 }}>
                             <span style={{ flex: 1, fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                            {t.due_date && <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="calendar" size={11} color="var(--fg-3)" />{new Date(t.due_date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}</span>}
                             {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
                           </button>
                           {editable && onItemPhoto && (

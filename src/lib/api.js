@@ -63,7 +63,7 @@ export async function updateProjectProgress(id, progress) {
 /* --------------------------- project detail --------------------------- */
 export async function listPhases(projectId) {
   const { data, error } = await supabase.from('phases')
-    .select('*, phase_tasks(id, title, note, done, sort_order)')
+    .select('*, phase_tasks(id, title, note, done, sort_order, due_date)')
     .eq('project_id', projectId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data || []).map(p => ({
@@ -71,7 +71,7 @@ export async function listPhases(projectId) {
     dates: fmtRange(p.start_date, p.end_date),
     tasks: (p.phase_tasks || [])
       .slice().sort((a, b) => a.sort_order - b.sort_order)
-      .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done })),
+      .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done, due_date: t.due_date })),
   }));
 }
 
@@ -113,6 +113,12 @@ export async function setPhaseTaskDone(id, done) {
 // Save the free-text remark on a sub-task.
 export async function setPhaseTaskNote(id, note) {
   const { error } = await supabase.from('phase_tasks').update({ note: note || null }).eq('id', id);
+  if (error) throw error;
+}
+
+// Set/clear an item's date. A dated item appears on the weekly schedule.
+export async function setPhaseTaskDate(id, date) {
+  const { error } = await supabase.from('phase_tasks').update({ due_date: date || null }).eq('id', id);
   if (error) throw error;
 }
 
@@ -223,7 +229,7 @@ export async function listSchedule(projectId) {
   return (data || []).map(s => {
     const x = d(s.scheduled_date);
     return {
-      id: s.id, title: s.title, state: s.state,
+      id: s.id, title: s.title, state: s.state, iso: s.scheduled_date,
       day: x ? DAYS[x.getDay()] : '', date: x ? String(x.getDate()) : '',
       when: s.state === 'today' ? 'Today' : (x ? DAYS[x.getDay()][0] + DAYS[x.getDay()].slice(1).toLowerCase() : ''),
     };

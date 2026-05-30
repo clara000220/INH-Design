@@ -83,6 +83,7 @@ function PhotoSheet({ photo, onClose, onAdd }) {
 function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   const [done, setDone] = useState(task.done);
   const [note, setNote] = useState(task.note || '');
+  const [date, setDate] = useState(task.due_date || '');
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(IS_LIVE);
   const [busy, setBusy] = useState(false);
@@ -112,6 +113,12 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
     catch (e) { setErr(e?.message || 'Could not save remark'); }
     finally { setBusy(false); }
   };
+  const saveDate = async (val) => {
+    setDate(val);
+    if (!IS_LIVE) return;
+    try { await api.setPhaseTaskDate(task.id, val || null); onChanged && onChanged(); }
+    catch (e) { setErr(e?.message || 'Could not set date'); }
+  };
   const addPhotos = async (files) => {
     const list = Array.from(files || []);
     if (!IS_LIVE || !list.length) return;
@@ -139,6 +146,11 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
         </div>
         <Pill status={done ? 'completed' : 'progress'} />
       </div>
+
+      <label className="inh-label">Date</label>
+      <input type="date" value={date} onChange={e => saveDate(e.target.value)} disabled={!canEdit}
+        style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+      <p className="meta" style={{ margin: '6px 0 14px' }}>Items with a date show on "This week".</p>
 
       <label className="inh-label">Remark</label>
       <textarea value={note} onChange={e => setNote(e.target.value)} disabled={!canEdit}
@@ -626,6 +638,25 @@ export default function App() {
     ? { name: profile.full_name || profile.name, initials: profile.initials || initialsOf(profile.full_name || profile.name) }
     : null;
 
+  // "This week" combines schedule_items with any dated phase-items, so a date
+  // set on an item surfaces on the weekly schedule. Demo mode → undefined.
+  const WEEK_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const todayISO = (() => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; })();
+  const mergedSchedule = IS_LIVE ? (() => {
+    const base = (detail?.schedule || []).map(s => ({ ...s, source: 'schedule' }));
+    const taskItems = (detail?.phases || []).flatMap(p => (p.tasks || [])
+      .filter(t => t.due_date)
+      .map(t => {
+        const d = new Date(t.due_date); const ok = !isNaN(d);
+        return {
+          id: 'task-' + t.id, taskId: t.id, source: 'task', title: t.title, iso: t.due_date,
+          state: t.done ? 'completed' : (t.due_date === todayISO ? 'today' : 'upcoming'),
+          day: ok ? WEEK_DAYS[d.getDay()] : '', date: ok ? String(d.getDate()) : '',
+        };
+      }));
+    return [...base, ...taskItems].sort((a, b) => String(a.iso || '').localeCompare(String(b.iso || '')));
+  })() : undefined;
+
   // ---- live data loaders ----
   const reloadTop = async () => {
     if (!IS_LIVE) return;
@@ -813,11 +844,22 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
-  const handleDeleteSchedule = (item) => setConfirm({
-    title: 'Delete this item?',
-    body: `"${item.title}" will be removed from the schedule.`,
-    onYes: async () => { await api.deleteScheduleItem(item.id); await loadDetail(activeProjectId); },
-  });
+  const handleDeleteSchedule = (item) => {
+    if (item.source === 'task') {
+      // Unschedule (clear the date) — the item stays inside its phase.
+      setConfirm({
+        title: 'Remove from this week?',
+        body: `"${item.title}" will be unscheduled. The item stays in its phase.`,
+        onYes: async () => { await api.setPhaseTaskDate(item.taskId, null); await loadDetail(activeProjectId); },
+      });
+    } else {
+      setConfirm({
+        title: 'Delete this item?',
+        body: `"${item.title}" will be removed from the schedule.`,
+        onYes: async () => { await api.deleteScheduleItem(item.id); await loadDetail(activeProjectId); },
+      });
+    }
+  };
 
   const handleDeletePhase = (phase) => setConfirm({
     title: 'Delete this phase?',
@@ -833,8 +875,11 @@ export default function App() {
 
   const handleToggleSchedule = async (item) => {
     if (!IS_LIVE) return;
-    const next = item.state === 'completed' ? 'upcoming' : 'completed';
-    await api.setScheduleState(item.id, next);
+    if (item.source === 'task') {
+      await api.setPhaseTaskDone(item.taskId, item.state !== 'completed');
+    } else {
+      await api.setScheduleState(item.id, item.state === 'completed' ? 'upcoming' : 'completed');
+    }
     await loadDetail(activeProjectId);
   };
 
@@ -926,7 +971,7 @@ export default function App() {
   const body = () => {
     if (top) {
       if (top.type === 'overview')
-        return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
+        return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={mergedSchedule}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
           onEditProject={CAN_EDIT(role) ? () => setSheet('editProject') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
@@ -934,7 +979,7 @@ export default function App() {
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddItem={CAN_EDIT(role) ? handleAddItem : null}
           onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
-          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.source === 'task' ? t.taskId : undefined })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
@@ -957,7 +1002,7 @@ export default function App() {
     if (tab === 'home') {
       if (role === 'homeowner') {
         if (!currentProject) return <EmptyState text="No project assigned to your account yet." />;
-        return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
+        return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={mergedSchedule}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
           onEditProject={CAN_EDIT(role) ? () => setSheet('editProject') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
@@ -965,7 +1010,7 @@ export default function App() {
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
           onAddItem={CAN_EDIT(role) ? handleAddItem : null}
           onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
-          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
+          onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.source === 'task' ? t.taskId : undefined })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
