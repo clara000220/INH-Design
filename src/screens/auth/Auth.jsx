@@ -111,14 +111,16 @@ export function Register({ onSignUp, onBack }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
-  const [err, setErr] = useState(null);
+  const [err, setErr] = useState(null);       // { field, msg } — field: 'email' | 'pw' | null
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);   // email-confirmation sent
+  const [done, setDone] = useState(false);    // email-confirmation sent
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const submit = async () => {
-    if (!name.trim()) { setErr('Enter your name'); return; }
-    if (!email.trim()) { setErr('Enter your email'); return; }
-    if (pw.length < 8) { setErr('Password must be at least 8 characters'); return; }
+    if (!name.trim()) { setErr({ field: null, msg: 'Enter your name' }); return; }
+    if (!EMAIL_RE.test(email.trim())) { setErr({ field: 'email', msg: 'Enter a valid email, e.g. you@gmail.com' }); return; }
+    if (pw.length < 8) { setErr({ field: 'pw', msg: 'Password must be at least 8 characters' }); return; }
     setErr(null); setBusy(true);
     try {
       const res = await onSignUp(email.trim(), pw, name.trim());
@@ -126,7 +128,11 @@ export function Register({ onSignUp, onBack }) {
       // "check your inbox" state. Otherwise the app enters straight away.
       if (res?.needsConfirm) setDone(true);
     } catch (e) {
-      setErr(e?.message || 'Could not create your account');
+      // Route Supabase's message to the field it's about so it shows in the
+      // right place (its email check says "invalid format" / "already registered").
+      const msg = e?.message || 'Could not create your account';
+      const field = /email/i.test(msg) ? 'email' : /password/i.test(msg) ? 'pw' : null;
+      setErr({ field, msg });
     } finally {
       setBusy(false);
     }
@@ -155,10 +161,13 @@ export function Register({ onSignUp, onBack }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Your name" autoFocus />
-        <Field label="Email" icon="mail" type="email" value={email} onChange={setEmail} placeholder="you@email.com" />
+        <Field label="Email" icon="mail" type="email" value={email} onChange={setEmail} placeholder="you@gmail.com"
+          error={err?.field === 'email' ? err.msg : null} />
         <Field label="Password" icon="lock" password value={pw} onChange={setPw} placeholder="At least 8 characters"
-          error={err} />
+          error={err?.field === 'pw' ? err.msg : null} />
       </div>
+
+      {err && !err.field && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err.msg}</p>}
 
       <div style={{ height: 24 }} />
       <Btn variant="primary" onClick={submit} disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</Btn>
