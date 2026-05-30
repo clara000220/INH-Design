@@ -788,6 +788,22 @@ export default function App() {
     if (IS_LIVE && auth === 'in' && activeProjectId) loadDetail(activeProjectId);
   }, [activeProjectId, auth]);
 
+  // Keep the stored overall progress in sync with item completion: when an
+  // editor views a project whose items don't match the saved %, persist it.
+  useEffect(() => {
+    if (!IS_LIVE || !CAN_EDIT(role) || !detail?.phases || detail.projectId !== activeProjectId) return;
+    const totals = detail.phases.reduce((a, p) => {
+      const tks = p.tasks || [];
+      return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length };
+    }, { t: 0, d: 0 });
+    if (totals.t === 0) return;
+    const pct = Math.round((totals.d / totals.t) * 100);
+    const cur = projects.find(p => p.id === activeProjectId)?.progress;
+    if (cur !== pct) {
+      api.updateProjectProgress(activeProjectId, pct).then(() => reloadTop()).catch(() => {});
+    }
+  }, [detail, role]);
+
   // ---- auth handlers ----
   const signIn = async (email, password) => {
     if (!IS_LIVE) { setRole(role || 'owner'); setTab('home'); setStack([]); setAuth('in'); return; }
