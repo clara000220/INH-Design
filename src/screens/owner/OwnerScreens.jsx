@@ -324,7 +324,7 @@ const DEMO_MEMBERS = [
   ...INH_DATA.team.homeowners.map(m => ({ ...m, role: 'homeowner' })),
 ];
 
-export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], onAddMember, onRemoveMember }) {
+export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], owner, onAddMember, onRemoveMember }) {
   const [picker, setPicker] = useState(false);  // homeowner picker sheet
   const [busy, setBusy] = useState(false);
 
@@ -374,13 +374,19 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
           <div className="inh-card" style={{ overflow: 'hidden' }}>
             {owners.length
               ? owners.map(m => <Member key={m.id} m={m} label="Owner" />)
-              : (
-                <div className="inh-row" style={{ cursor: 'default' }}>
-                  <Avatar initials="TW" />
-                  <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>Tan Wei Ming</div><div className="inh-row__sub">Full access · fixed</div></div>
-                  <RoleBadge role="owner" />
-                </div>
-              )}
+              : owner
+                ? (
+                  <div className="inh-row" style={{ cursor: 'default' }}>
+                    <Avatar initials={owner.initials} />
+                    <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{owner.name}</div><div className="inh-row__sub">Full access · fixed</div></div>
+                    <RoleBadge role="owner" />
+                  </div>
+                )
+                : (
+                  <div className="inh-row" style={{ cursor: 'default' }}>
+                    <div className="inh-row__main"><div className="inh-row__sub">No owner found.</div></div>
+                  </div>
+                )}
           </div>
         </div>
 

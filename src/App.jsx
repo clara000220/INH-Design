@@ -762,6 +762,9 @@ export default function App() {
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
       if (top.type === 'team')
         return <TeamScreen project={top.project} members={live(detail?.members)} homeowners={homeowners}
+          owner={IS_LIVE
+            ? users.find(u => u.role === 'owner')
+            : { name: INH_DATA.roleMeta.owner.person, initials: INH_DATA.roleMeta.owner.initials }}
           onAddMember={handleAddMember} onRemoveMember={handleRemoveMember} />;
     }
     if (tab === 'home') {
