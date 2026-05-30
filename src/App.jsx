@@ -713,11 +713,13 @@ export default function App() {
   // ---- header config ----
   const header = () => {
     if (top) {
+      // Note: this object's values are all evaluated before [top.type] selects
+      // one, so guard top.project — the 'users' entry is pushed without one.
       const h = {
-        overview:   { eyebrow: top.project.code, title: 'Overview', back: pop },
-        feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project.name, back: pop },
+        overview:   { eyebrow: top.project?.code, title: 'Overview', back: pop },
+        feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project?.name, back: pop },
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
-        team:       { eyebrow: top.project.name, title: 'Team & Access', back: pop },
+        team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
       }[top.type];
       return <AppHeader role={role} profile={me} {...h} />;
     }
