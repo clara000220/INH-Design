@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask }) {
   const [open, setOpen] = useState(2);
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
@@ -138,6 +138,18 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     <div className="inh-row__title" style={{ fontSize: 14.5 }}>{p.name}</div>
                     <div className="inh-row__sub">{p.dates}</div>
                   </div>
+                  {CAN_EDIT(role) && onMovePhase && (
+                    <div style={{ display: 'flex', flexDirection: 'column', marginRight: 4 }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => i > 0 && onMovePhase(i, i - 1)} disabled={i === 0} aria-label="Move phase up"
+                        style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 1, display: 'flex' }}>
+                        <Icon name="chevron-up" size={17} color="var(--fg-2)" stroke={2.4} />
+                      </button>
+                      <button onClick={() => i < phases.length - 1 && onMovePhase(i, i + 1)} disabled={i === phases.length - 1} aria-label="Move phase down"
+                        style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === phases.length - 1 ? 'default' : 'pointer', opacity: i === phases.length - 1 ? 0.25 : 1, display: 'flex' }}>
+                        <Icon name="chevron-down" size={17} color="var(--fg-2)" stroke={2.4} />
+                      </button>
+                    </div>
+                  )}
                   <Icon name="chevron-down" size={18} color="var(--fg-3)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
                 </div>
                 {open === i && (
@@ -148,7 +160,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     </div>
                     {(p.tasks || []).length > 0 && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 10 }}>
-                        {p.tasks.map(t => (
+                        {p.tasks.map((t, ti) => (
                           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 0' }}>
                             <button
                               onClick={() => CAN_EDIT(role) && onTogglePhaseTask && onTogglePhaseTask(t)}
@@ -162,6 +174,18 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                               {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
                               {onOpenTask && <Icon name="chevron-right" size={15} color="var(--fg-3)" />}
                             </button>
+                            {CAN_EDIT(role) && onMoveTask && (
+                              <div style={{ display: 'flex', flexShrink: 0 }}>
+                                <button onClick={() => ti > 0 && onMoveTask(p, ti, ti - 1)} disabled={ti === 0} aria-label="Move sub-task up"
+                                  style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === 0 ? 'default' : 'pointer', opacity: ti === 0 ? 0.25 : 1, display: 'flex' }}>
+                                  <Icon name="chevron-up" size={15} color="var(--fg-3)" stroke={2.4} />
+                                </button>
+                                <button onClick={() => ti < p.tasks.length - 1 && onMoveTask(p, ti, ti + 1)} disabled={ti === p.tasks.length - 1} aria-label="Move sub-task down"
+                                  style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === p.tasks.length - 1 ? 'default' : 'pointer', opacity: ti === p.tasks.length - 1 ? 0.25 : 1, display: 'flex' }}>
+                                  <Icon name="chevron-down" size={15} color="var(--fg-3)" stroke={2.4} />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

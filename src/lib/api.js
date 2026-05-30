@@ -162,6 +162,23 @@ export async function updatePhase(id, patch = {}) {
   if (error) throw error;
 }
 
+// Persist a new phase order. Writes sort_order = array index for each id,
+// which self-heals any gaps/duplicates from earlier inserts.
+export async function reorderPhases(orderedIds = []) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('phases').update({ sort_order: i }).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
+// Persist a new sub-task order within a phase.
+export async function reorderPhaseTasks(orderedIds = []) {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await supabase.from('phase_tasks').update({ sort_order: i }).eq('id', orderedIds[i]);
+    if (error) throw error;
+  }
+}
+
 export async function addScheduleItem(projectId, { title, scheduled_date, state = 'upcoming' }) {
   const { error } = await supabase.from('schedule_items')
     .insert({ project_id: projectId, title, scheduled_date, state });

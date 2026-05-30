@@ -683,6 +683,26 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleMovePhase = async (from, to) => {
+    if (!IS_LIVE) return;
+    const arr = (detail?.phases || []).slice();
+    if (to < 0 || to >= arr.length) return;
+    const [m] = arr.splice(from, 1);
+    arr.splice(to, 0, m);
+    await api.reorderPhases(arr.map(p => p.id));
+    await loadDetail(activeProjectId);
+  };
+
+  const handleMoveTask = async (phase, from, to) => {
+    if (!IS_LIVE) return;
+    const arr = (phase.tasks || []).slice();
+    if (to < 0 || to >= arr.length) return;
+    const [m] = arr.splice(from, 1);
+    arr.splice(to, 0, m);
+    await api.reorderPhaseTasks(arr.map(t => t.id));
+    await loadDetail(activeProjectId);
+  };
+
   const handleUploadDoc = async (file, opts) => {
     if (!IS_LIVE) return;
     await api.uploadDocument(activeProjectId, file, opts);
@@ -754,6 +774,8 @@ export default function App() {
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
+          onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
+          onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
@@ -779,6 +801,8 @@ export default function App() {
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
+          onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
+          onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
