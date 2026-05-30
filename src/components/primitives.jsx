@@ -105,6 +105,7 @@ export const TAB_DEFS = {
   owner: [
     { id: 'home', label: 'Projects', icon: 'briefcase' },
     { id: 'updates', label: 'Updates', icon: 'image' },
+    { id: 'documents', label: 'Documents', icon: 'file-text' },
     { id: 'fees', label: 'Fees', icon: 'banknote' },
     { id: 'more', label: 'More', icon: 'more-horizontal' },
   ],

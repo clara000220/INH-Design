@@ -330,18 +330,22 @@ function AddAccountSheet({ onClose, onCreate, callerRole = 'owner' }) {
   );
 }
 
-function PropertySheet({ role, projects, onClose }) {
+function PropertySheet({ role, projects, selectedId, onSelect, onClose }) {
   const list = role === 'homeowner' ? projects.slice(0, 1) : projects;
   return (
     <Sheet title={role === 'homeowner' ? 'Switch property' : 'Switch project'} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {list.map((p, i) => (
-          <div key={p.id} className="inh-row" style={{ borderRadius: 12, background: i === 0 ? 'var(--inh-lime-soft)' : 'transparent' }} onClick={onClose}>
-            <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}><Icon name="building" size={20} color="var(--inh-charcoal)" /></div>
-            <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{p.name}</div><div className="inh-row__sub">{p.code}</div></div>
-            {i === 0 && <Icon name="check" size={18} color="var(--inh-charcoal)" stroke={2.6} />}
-          </div>
-        ))}
+        {list.map((p) => {
+          const active = p.id === selectedId;
+          return (
+            <div key={p.id} className="inh-row" style={{ borderRadius: 12, cursor: 'pointer', background: active ? 'var(--inh-lime-soft)' : 'transparent' }}
+              onClick={() => { onSelect && onSelect(p.id); onClose(); }}>
+              <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}><Icon name="building" size={20} color="var(--inh-charcoal)" /></div>
+              <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{p.name}</div><div className="inh-row__sub">{p.code} · {p.progress}%</div></div>
+              {active && <Icon name="check" size={18} color="var(--inh-charcoal)" stroke={2.6} />}
+            </div>
+          );
+        })}
       </div>
     </Sheet>
   );
@@ -658,6 +662,7 @@ export default function App() {
   const [confirm, setConfirm] = useState(null);   // { title, body, onYes }
   const [lang, setLangState] = useState(getLang());
   const changeLang = (code) => { setLang(code); setLangState(code); };
+  const [feedProjectId, setFeedProjectId] = useState(null);   // which project the owner views on Updates/Documents
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -672,7 +677,7 @@ export default function App() {
   const pop = () => setStack(s => s.slice(0, -1));
   const top = stack[stack.length - 1];
 
-  const currentProject = projects[0];
+  const currentProject = projects.find(p => p.id === feedProjectId) || projects[0];
   const baseProject = top?.project || currentProject;
   const activeProjectId = baseProject?.id;
   // Always resolve the freshest copy from the loaded list so the hero reflects
@@ -1069,8 +1074,8 @@ export default function App() {
       home: role === 'homeowner'
         ? { eyebrow: 'Your project', title: 'Overview', property: currentProject?.name, onProperty: () => setSheet('property'), onBell: () => {} }
         : { eyebrow: 'INH Design & Build', title: 'Projects', onBell: () => {} },
-      updates:   { eyebrow: currentProject?.name || 'INH Design & Build', title: 'Updates', onBell: () => {} },
-      documents: { eyebrow: currentProject?.name || 'INH Design & Build', title: 'Documents' },
+      updates:   { eyebrow: 'INH Design & Build', title: 'Updates', property: currentProject?.name, onProperty: projects.length > 1 ? () => setSheet('property') : undefined, onBell: () => {} },
+      documents: { eyebrow: 'INH Design & Build', title: 'Documents', property: currentProject?.name, onProperty: projects.length > 1 ? () => setSheet('property') : undefined },
       fees:      { eyebrow: 'Owner only', title: 'Fees Release' },
       more:      { title: 'More' },
     }[tab];
@@ -1171,7 +1176,7 @@ export default function App() {
         {body()}
         <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
       </div>
-      {sheet === 'property' && <PropertySheet role={role} projects={projects} onClose={() => setSheet(null)} />}
+      {sheet === 'property' && <PropertySheet role={role} projects={projects} selectedId={currentProject?.id} onSelect={setFeedProjectId} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
