@@ -42,3 +42,17 @@ export const supabase = url && anon
   : null;
 
 export const IS_LIVE = !!supabase;
+
+/* Username support. Supabase Auth always needs an email, so a bare username
+   (no "@") is mapped to a synthetic address under this domain. Sign-in applies
+   the same mapping, so a client can log in by typing just "admin". No mail is
+   ever sent to it — accounts are created already-confirmed. */
+export const USERNAME_DOMAIN = 'inh.app';
+
+export function normalizeLogin(idRaw) {
+  const id = (idRaw || '').trim().toLowerCase();
+  if (!id) return id;
+  if (id.includes('@')) return id;                       // already an email
+  const slug = id.replace(/[^a-z0-9._-]/g, '');          // sanitise to a safe local-part
+  return `${slug}@${USERNAME_DOMAIN}`;
+}

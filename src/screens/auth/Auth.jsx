@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon.jsx';
 import { Btn } from '../../components/primitives.jsx';
-import { setRemember } from '../../lib/supabase.js';
+import { setRemember, normalizeLogin } from '../../lib/supabase.js';
 
 export function Logo({ height = 54 }) {
   return <img src="/assets/inh-logo.png" alt="INH Renovation & Design" style={{ height, width: 'auto', display: 'block' }} />;
@@ -47,17 +47,17 @@ export function Field({ label, icon, type = 'text', value, onChange, placeholder
 export function Login({ onSignIn, onForgot, onRegister, live }) {
   const [email, setEmail] = useState(live ? '' : 'boss@inh.com.my');
   const [pw, setPw] = useState(live ? '' : 'renovate2026');
-  const [remember, setRemember] = useState(true);
+  const [remember, setRememberOn] = useState(true);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
-    if (!email || !pw) { setErr('Enter your email and password'); return; }
+    if (!email || !pw) { setErr('Enter your email or username and password'); return; }
     setErr(null);
     setBusy(true);
     try {
       setRemember(remember);
-      await onSignIn(email, pw);
+      await onSignIn(normalizeLogin(email), pw);
     } catch (e) {
       setErr(e?.message || 'Email or password is incorrect');
     } finally {
@@ -72,13 +72,13 @@ export function Login({ onSignIn, onForgot, onRegister, live }) {
       <p className="body-2" style={{ marginBottom: 24 }}>Sign in to your INH account.</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <Field label="Email or phone" icon="mail" value={email} onChange={setEmail} placeholder="you@email.com" />
+        <Field label="Email or username" icon="mail" value={email} onChange={setEmail} placeholder="you@email.com or username" />
         <Field label="Password" icon="lock" password value={pw} onChange={setPw} placeholder="Enter password"
           error={err} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 0 22px' }}>
-        <button onClick={() => setRemember(r => !r)} style={{ display: 'flex', alignItems: 'center', gap: 9, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+        <button onClick={() => setRememberOn(r => !r)} style={{ display: 'flex', alignItems: 'center', gap: 9, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
           <span className={'inh-toggle' + (remember ? ' on' : '')} style={{
             width: 42, height: 25, borderRadius: 999, position: 'relative', flexShrink: 0,
             background: remember ? 'var(--inh-lime)' : 'var(--surface-2)',

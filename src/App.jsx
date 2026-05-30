@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from './components/Icon.jsx';
 import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
-import { supabase, IS_LIVE } from './lib/supabase.js';
+import { supabase, IS_LIVE, normalizeLogin } from './lib/supabase.js';
 import * as api from './lib/api.js';
 import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
@@ -192,16 +192,19 @@ function AddAccountSheet({ onClose, onCreate }) {
   const [role, setRole] = useState('homeowner');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [done, setDone] = useState(null);   // { email, pw } once created
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const ready = EMAIL_RE.test(email.trim()) && pw.length >= 8;
+  const [done, setDone] = useState(null);   // { login, pw } once created
+  // Accept a real email OR a plain username (letters/digits/._-).
+  const ID_RE = /^([^\s@]+@[^\s@]+\.[^\s@]+|[a-z0-9._-]+)$/i;
+  const ready = ID_RE.test(email.trim()) && pw.length >= 8;
 
   const create = async () => {
-    if (!ready) { setErr('Enter a valid email and an 8+ character password'); return; }
+    if (!ready) { setErr('Enter an email or username, and an 8+ character password'); return; }
     setBusy(true); setErr(null);
     try {
-      await onCreate({ email: email.trim(), password: pw, fullName: name.trim(), role });
-      setDone({ email: email.trim(), pw });
+      // normalizeLogin turns a bare username into a synthetic email so Supabase
+      // accepts it; the sign-in screen applies the same mapping.
+      await onCreate({ email: normalizeLogin(email), password: pw, fullName: name.trim(), role });
+      setDone({ login: email.trim(), pw });
     } catch (e) { setErr(e?.message || 'Could not create account'); }
     finally { setBusy(false); }
   };
@@ -215,20 +218,20 @@ function AddAccountSheet({ onClose, onCreate }) {
         <p className="body-2">The account is active immediately — no email confirmation needed. Share these sign-in details with your client.</p>
       </div>
       <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div><div className="meta">Email</div><div style={{ fontWeight: 700, fontSize: 14.5 }}>{done.email}</div></div>
+        <div><div className="meta">Login (email or username)</div><div style={{ fontWeight: 700, fontSize: 14.5 }}>{done.login}</div></div>
         <div><div className="meta">Temporary password</div><div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16, letterSpacing: 0.5 }}>{done.pw}</div></div>
       </div>
-      <p className="meta" style={{ marginTop: 10 }}>Tip: ask them to change it after first sign-in via Forgot password.</p>
+      <p className="meta" style={{ marginTop: 10 }}>They sign in with exactly that login + password. (Password reset by email only works for real email addresses.)</p>
       <div style={{ marginTop: 16 }}><Btn variant="primary" icon="check" onClick={onClose}>Done</Btn></div>
     </Sheet>
   );
 
   return (
     <Sheet title="Add account" onClose={onClose}>
-      <p className="body-2" style={{ marginBottom: 16 }}>Create a client account directly with a temporary password. No email confirmation required.</p>
+      <p className="body-2" style={{ marginBottom: 16 }}>Create a client account directly with a temporary password. Use a real email, or just a username (e.g. <b>admin</b>) — no email confirmation required.</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Client's name" autoFocus />
-        <Field label="Email" icon="mail" type="email" value={email} onChange={setEmail} placeholder="client@email.com" />
+        <Field label="Email or username" icon="mail" value={email} onChange={setEmail} placeholder="client@email.com or a username" />
         <div>
           <label className="inh-label">Temporary password</label>
           <div style={{ display: 'flex', gap: 8 }}>
