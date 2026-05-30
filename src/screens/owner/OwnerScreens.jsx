@@ -346,20 +346,22 @@ const DEMO_MEMBERS = [
   ...INH_DATA.team.homeowners.map(m => ({ ...m, role: 'homeowner' })),
 ];
 
-export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], owner, onAddMember, onRemoveMember }) {
-  const [picker, setPicker] = useState(false);  // homeowner picker sheet
+export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], people, owner, onAddMember, onRemoveMember }) {
+  const [picker, setPicker] = useState(null);   // 'admin' | 'homeowner' — which role to add
   const [busy, setBusy] = useState(false);
 
   const owners = members.filter(m => m.role === 'owner');
   const admins = members.filter(m => m.role === 'admin');
   const hos = members.filter(m => m.role === 'homeowner');
   const memberIds = new Set(members.map(m => m.id));
-  const candidates = homeowners.filter(h => !memberIds.has(h.id));
+  // Addable pool: all non-owner users (live) or the homeowner list (demo).
+  const pool = people ?? homeowners;
+  const candidates = pool.filter(p => !memberIds.has(p.id) && (!picker || p.role === picker));
 
   const add = async (userId) => {
-    if (!onAddMember) { setPicker(false); return; }
+    if (!onAddMember) { setPicker(null); return; }
     setBusy(true);
-    try { await onAddMember(userId); } finally { setBusy(false); setPicker(false); }
+    try { await onAddMember(userId); } finally { setBusy(false); setPicker(null); }
   };
   const remove = async (userId) => {
     if (!onRemoveMember) return;
@@ -389,7 +391,7 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <p className="body-2">Control who can see <b style={{ color: 'var(--fg-1)' }}>{project.name}</b>. Changes are logged.</p>
+        <p className="body-2">Control who can access <b style={{ color: 'var(--fg-1)' }}>{project.name}</b>. Only people listed here can open this project. Changes are logged.</p>
 
         <div>
           <div className="inh-section">Owner</div>
@@ -413,7 +415,10 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
         </div>
 
         <div>
-          <div className="inh-section" style={{ margin: '4px 0 10px' }}>Admins</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="inh-section" style={{ margin: '4px 0 10px' }}>Admins</div>
+            {onAddMember && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setPicker('admin')}>+ Add admin</button>}
+          </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
             {admins.length ? admins.map(m => <Member key={m.id} m={m} label="Admin" removable />)
               : <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No admins assigned.</div></div></div>}
@@ -423,7 +428,7 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="inh-section" style={{ margin: '4px 0 10px' }}>Homeowners</div>
-            <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setPicker(true)}>+ Add homeowner</button>
+            {onAddMember && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setPicker('homeowner')}>+ Add homeowner</button>}
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
             {hos.length ? hos.map(m => <Member key={m.id} m={m} label="Homeowner" removable />)
@@ -433,15 +438,18 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
       </div>
 
       {picker && (
-        <Sheet title="Assign homeowner" onClose={() => setPicker(false)}>
-          <p className="body-2" style={{ marginBottom: 14 }}>Pick a homeowner to give access to this project.</p>
-          {candidates.length === 0 && <p className="body-2">No more homeowners to add. Invite one from the Users screen first.</p>}
+        <Sheet title={picker === 'admin' ? 'Add admin to project' : 'Add homeowner to project'} onClose={() => setPicker(null)}>
+          <p className="body-2" style={{ marginBottom: 14 }}>Pick a {picker} to give access to this project.</p>
+          {candidates.length === 0 && <p className="body-2">No more {picker}s to add. Create one from the Users screen first.</p>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {candidates.map(h => (
               <button key={h.id} className="inh-row" disabled={busy} onClick={() => add(h.id)}
                 style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer' }}>
                 <Avatar initials={h.initials} light />
-                <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{h.name}</div></div>
+                <div className="inh-row__main">
+                  <div className="inh-row__title" style={{ fontSize: 14.5 }}>{h.name}</div>
+                  {h.contact && <div className="inh-row__sub">{h.contact}</div>}
+                </div>
                 <Icon name="plus" size={18} color="var(--inh-charcoal)" />
               </button>
             ))}

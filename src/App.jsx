@@ -959,8 +959,8 @@ export default function App() {
       home: role === 'homeowner'
         ? { eyebrow: 'Your project', title: 'Overview', property: currentProject?.name, onProperty: () => setSheet('property'), onBell: () => {} }
         : { eyebrow: 'INH Design & Build', title: 'Projects', onBell: () => {} },
-      updates:   { eyebrow: role === 'homeowner' ? currentProject?.name : 'INH Design & Build', title: 'Updates', onBell: () => {} },
-      documents: { eyebrow: role === 'homeowner' ? currentProject?.name : 'INH Design & Build', title: 'Documents' },
+      updates:   { eyebrow: currentProject?.name || 'INH Design & Build', title: 'Updates', onBell: () => {} },
+      documents: { eyebrow: currentProject?.name || 'INH Design & Build', title: 'Documents' },
       fees:      { eyebrow: 'Owner only', title: 'Fees Release' },
       more:      { title: 'More' },
     }[tab];
@@ -994,6 +994,7 @@ export default function App() {
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
       if (top.type === 'team')
         return <TeamScreen project={top.project} members={live(detail?.members)} homeowners={homeowners}
+          people={IS_LIVE ? users.filter(u => u.role !== 'owner') : undefined}
           owner={IS_LIVE
             ? users.find(u => u.role === 'owner')
             : { name: INH_DATA.roleMeta.owner.person, initials: INH_DATA.roleMeta.owner.initials }}
