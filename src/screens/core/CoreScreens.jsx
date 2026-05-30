@@ -37,7 +37,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -75,6 +75,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 <button onClick={onManageAccess} aria-label="Team & access"
                   style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
                   <Icon name="users" size={12} color="var(--on-dark-2)" /> Team
+                </button>
+              )}
+              {onOpenDocs && (
+                <button onClick={onOpenDocs} aria-label="Documents"
+                  style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
+                  <Icon name="file-text" size={12} color="var(--on-dark-2)" /> Docs
                 </button>
               )}
               {CAN_EDIT(role) && onEditProject && (

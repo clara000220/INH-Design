@@ -1061,6 +1061,7 @@ export default function App() {
         feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project?.name, back: pop },
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
         team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
+        documents:  { eyebrow: top.project?.name, title: 'Documents', back: pop },
       }[top.type];
       return <AppHeader role={role} profile={me} {...h} />;
     }
@@ -1097,6 +1098,7 @@ export default function App() {
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
+          onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1104,6 +1106,9 @@ export default function App() {
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
+      if (top.type === 'documents')
+        return <DocumentsScreen role={role} documents={live(detail?.documents)}
+          onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
       if (top.type === 'team')
         return <TeamScreen project={top.project} members={live(detail?.members)} homeowners={homeowners}
           people={IS_LIVE ? users.filter(u => u.role !== 'owner') : undefined}
@@ -1132,6 +1137,7 @@ export default function App() {
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
+          onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
