@@ -362,7 +362,10 @@ export async function listUsers() {
 // confirmation). Runs through the admin-create-user Edge Function, which holds
 // the service_role key server-side and re-checks the caller's role.
 export async function adminCreateUser({ email, password, fullName, role = 'homeowner' }) {
-  const { data, error } = await supabase.functions.invoke('admin-create-user', {
+  // NOTE: the deployed Edge Function's URL slug is 'bright-service' (Supabase
+  // locks the slug at creation; the dashboard title was renamed but the slug
+  // stays). The app must invoke by slug, so this string must match the slug.
+  const { data, error } = await supabase.functions.invoke('bright-service', {
     body: { email, password, full_name: fullName, role },
   });
   if (error) {
