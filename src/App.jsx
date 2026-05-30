@@ -1030,6 +1030,27 @@ export default function App() {
     await reloadTop();
   };
 
+  const handleAddPayment = async (form) => {
+    if (!IS_LIVE) return;
+    await api.addPayment(activeProjectId, form);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
+
+  const handleEditPayment = async (id, form) => {
+    if (!IS_LIVE) return;
+    await api.updatePayment(id, form);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
+
+  const handleDeletePayment = async (id) => {
+    if (!IS_LIVE) return;
+    await api.deletePayment(id);
+    await loadDetail(activeProjectId);
+    await reloadTop();
+  };
+
   // ---- header config ----
   const header = () => {
     if (top) {
@@ -1077,7 +1098,8 @@ export default function App() {
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
-        return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
+        return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
+          onSetStatus={handleSetPayment} onAdd={handleAddPayment} onEdit={handleEditPayment} onDelete={handleDeletePayment} />;
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;

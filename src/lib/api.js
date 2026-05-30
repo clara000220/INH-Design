@@ -357,7 +357,7 @@ export async function listPayments(projectId) {
   if (error) throw error;
   return (data || []).map(p => ({
     id: p.id, contractor: p.contractor, stage: p.stage, amount: Number(p.amount),
-    status: p.status, method: p.method,
+    status: p.status, method: p.method, due_date: p.due_date,
     date: p.status === 'released'
       ? 'Released ' + fmtDayMon(p.released_at || p.due_date)
       : p.status === 'overdue' ? 'Overdue ' + fmtDayMon(p.due_date)
@@ -369,6 +369,31 @@ export async function listPayments(projectId) {
 export async function setPaymentStatus(id, status) {
   const { error } = await supabase.from('payments').update({ status }).eq('id', id);
   if (error) throw error; // trigger writes the audit row + stamps released_at
+}
+
+// Owner-only (RLS): add a contractor payment to a project.
+export async function addPayment(projectId, { contractor, stage, amount, method, due_date, status = 'pending' }) {
+  const { error } = await supabase.from('payments').insert({
+    project_id: projectId, contractor, stage, amount,
+    method, due_date: due_date || null, status,
+  });
+  if (error) throw error;
+}
+
+// Owner-only: edit a payment's details.
+export async function updatePayment(id, patch = {}) {
+  const clean = {};
+  ['contractor', 'stage', 'amount', 'method', 'due_date', 'status'].forEach(k => {
+    if (patch[k] !== undefined) clean[k] = patch[k] === '' ? null : patch[k];
+  });
+  const { error } = await supabase.from('payments').update(clean).eq('id', id);
+  if (error) throw error;
+}
+
+// Owner-only: delete a payment.
+export async function deletePayment(id) {
+  const { error } = await supabase.from('payments').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function listAudit() {

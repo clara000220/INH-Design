@@ -106,12 +106,67 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject }) {
   );
 }
 
+/* Add / edit a contractor payment. No bank account numbers are stored — only
+   a method label (e.g. "Bank transfer") and the amount. */
+function PaymentForm({ pay, onClose, onSave }) {
+  const [f, setF] = useState({
+    contractor: pay?.contractor || '', stage: pay?.stage || '',
+    amount: pay?.amount != null ? String(pay.amount) : '',
+    method: pay?.method || 'Bank transfer',
+    due_date: pay?.due_date ? String(pay.due_date).slice(0, 10) : '',
+    status: pay?.status || 'pending',
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
+  const ready = f.contractor.trim() && f.amount !== '' && !isNaN(Number(f.amount));
+  const save = async () => {
+    if (!ready) return;
+    setBusy(true); setErr(null);
+    try {
+      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status });
+      onClose();
+    } catch (e) { setErr(e?.message || 'Could not save payment'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title={pay ? 'Edit payment' : 'Add payment'} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
+        <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
+        <Field label="Amount (RM)" icon="banknote" type="number" value={f.amount} onChange={set('amount')} placeholder="e.g. 14200" />
+        <div>
+          <label className="inh-label">Method</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['Bank transfer', 'DuitNow', 'Cash'].map(m => (
+              <button key={m} onClick={() => set('method')(m)} className={'inh-chip' + (f.method === m ? ' active' : '')} style={{ flex: 1 }}>{m}</button>
+            ))}
+          </div>
+        </div>
+        <Field label="Due date" icon="calendar" type="date" value={f.due_date} onChange={set('due_date')} placeholder="" />
+        <div>
+          <label className="inh-label">Status</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[['pending', 'Pending'], ['released', 'Released'], ['hold', 'On hold'], ['overdue', 'Overdue']].map(([v, l]) => (
+              <button key={v} onClick={() => set('status')(v)} className={'inh-chip' + (f.status === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : (pay ? 'Save changes' : 'Add payment')}</Btn></div>
+    </Sheet>
+  );
+}
+
 /* =================== FEES — project payment detail =================== */
-export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus }) {
+export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus, onAdd, onEdit, onDelete }) {
   const [confirm, setConfirm] = useState(null); // {pay, action}
   const [payments, setPayments] = useState(paymentsProp);
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(null);       // null | { pay } (pay null = add)
+  const [del, setDel] = useState(null);         // payment pending delete confirm
 
   useEffect(() => { setPayments(paymentsProp); }, [paymentsProp]);
 
@@ -146,16 +201,32 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
         </div>
 
         <div>
-          <div className="inh-section">Contractor payments</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="inh-section">Contractor payments</div>
+            {onAdd && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setForm({ pay: null })}>+ Add payment</button>}
+          </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {payments.length === 0 && <div style={{ padding: 16 }}><div className="inh-row__sub">No payments yet.</div></div>}
             {payments.map(p => (
               <div key={p.id} style={{ padding: 16, borderTop: '1px solid var(--border)' }} className="pay-block">
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div className="inh-row__ico" style={{ marginTop: 2 }}><Icon name="hard-hat" size={20} /></div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
                       <div className="inh-row__title">{p.contractor}</div>
-                      <div className="inh-figure" style={{ fontSize: 15 }}>{rm(p.amount)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div className="inh-figure" style={{ fontSize: 15 }}>{rm(p.amount)}</div>
+                        {onEdit && (
+                          <button onClick={() => setForm({ pay: p })} aria-label="Edit payment" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                            <Icon name="pencil" size={14} color="var(--fg-3)" />
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button onClick={() => setDel(p)} aria-label="Delete payment" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                            <Icon name="trash" size={14} color="var(--fg-3)" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="inh-row__sub">{p.stage}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
@@ -223,6 +294,25 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
           <Icon name="check-circle" size={20} color="var(--inh-lime)" />
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>{toast}</span>
         </div>
+      )}
+
+      {form && (
+        <PaymentForm pay={form.pay} onClose={() => setForm(null)}
+          onSave={(data) => (form.pay ? onEdit(form.pay.id, data) : onAdd(data))} />
+      )}
+
+      {del && (
+        <Dialog onClose={() => setDel(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="trash" size={24} color="var(--error)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Delete payment?</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>The {rm(del.amount)} payment to {del.contractor} will be removed.</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setDel(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="danger" onClick={async () => { setBusy(true); try { await onDelete(del.id); setDel(null); } catch (e) { setToast(e?.message || 'Could not delete'); setTimeout(() => setToast(null), 2600); } finally { setBusy(false); } }} disabled={busy}>{busy ? 'Working…' : 'Delete'}</Btn>
+          </div>
+        </Dialog>
       )}
     </div>
   );
