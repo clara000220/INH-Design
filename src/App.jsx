@@ -6,6 +6,7 @@ import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE } from './lib/supabase.js';
 import * as api from './lib/api.js';
 import { Login, ForgotFlow, Field } from './screens/auth/Auth.jsx';
+import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
   ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen,
@@ -236,6 +237,45 @@ function EditNameSheet({ initial, onClose, onSave }) {
   );
 }
 
+function SettingsSheet({ lang, onChangeLang, onClose }) {
+  return (
+    <Sheet title={t('Settings & language')} onClose={onClose}>
+      <label className="inh-label">{t('Language')}</label>
+      <p className="body-2" style={{ marginBottom: 14 }}>{t('Choose the language for the app.')}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {LANGUAGES.map(l => (
+          <button key={l.code} onClick={() => onChangeLang(l.code)} className="inh-row"
+            style={{ borderRadius: 12, border: '1px solid var(--border)', background: lang === l.code ? 'var(--inh-lime-soft)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+            <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}>
+              <Icon name="globe" size={20} color="var(--inh-charcoal)" />
+            </div>
+            <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{l.label}</div></div>
+            {lang === l.code && <Icon name="check" size={18} color="var(--inh-charcoal)" stroke={2.6} />}
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
+function SupportSheet({ onClose }) {
+  const email = 'hello@inhdesign.com.my';
+  return (
+    <Sheet title={t('Support')} onClose={onClose}>
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+          <Icon name="message-circle" size={26} color="var(--inh-charcoal)" />
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18 }}>{t('Need a hand?')}</div>
+        <p className="body-2" style={{ marginTop: 6 }}>{t("Contact INH Design & Build and we'll help you out.")}</p>
+      </div>
+      <a href={'mailto:' + email} style={{ textDecoration: 'none' }}>
+        <Btn variant="primary" icon="mail">{t('Email support')}</Btn>
+      </a>
+    </Sheet>
+  );
+}
+
 function AddProjectSheet({ onClose, onSave }) {
   const [f, setF] = useState({ name: '', code: '', address: '', type: '', est_handover: '' });
   const [busy, setBusy] = useState(false);
@@ -451,6 +491,8 @@ export default function App() {
   const [sheet, setSheet] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [task, setTask] = useState(null);
+  const [lang, setLangState] = useState(getLang());
+  const changeLang = (code) => { setLang(code); setLangState(code); };
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -469,6 +511,12 @@ export default function App() {
   const activeProject = top?.project || currentProject;
   const activeProjectId = activeProject?.id;
   const live = v => (IS_LIVE ? (v ?? []) : undefined);   // demo → undefined → screen uses INH_DATA defaults
+
+  // Real signed-in identity for the chrome (sidebar foot + header avatar).
+  // In demo mode this stays null so screens fall back to roleMeta.
+  const me = profile
+    ? { name: profile.full_name || profile.name, initials: profile.initials || initialsOf(profile.full_name || profile.name) }
+    : null;
 
   // ---- live data loaders ----
   const reloadTop = async () => {
@@ -656,7 +704,7 @@ export default function App() {
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
         team:       { eyebrow: top.project.name, title: 'Team & Access', back: pop },
       }[top.type];
-      return <AppHeader role={role} {...h} />;
+      return <AppHeader role={role} profile={me} {...h} />;
     }
     const base = {
       home: role === 'homeowner'
@@ -667,7 +715,7 @@ export default function App() {
       fees:      { eyebrow: 'Owner only', title: 'Fees Release' },
       more:      { title: 'More' },
     }[tab];
-    return <AppHeader role={role} {...base} onAvatar={() => setTab('more')} />;
+    return <AppHeader role={role} profile={me} {...base} onAvatar={() => setTab('more')} />;
   };
 
   // ---- body ----
@@ -714,9 +762,12 @@ export default function App() {
     if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
       onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
     if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
-    if (tab === 'more')      return <MoreScreen role={role} profile={profile ? { name: profile.full_name || profile.name, initials: profile.initials } : null}
+    if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
-      onSignOut={signOut} onEditName={() => setSheet('editName')} />;
+      onSignOut={signOut} onEditName={() => setSheet('editName')}
+      onSettings={() => setSheet('settings')} onSupport={() => setSheet('support')}
+      onAllProjects={() => { setTab('home'); setStack([]); }}
+      onManageUpdates={() => { setTab('updates'); setStack([]); }} />;
     return null;
   };
 
@@ -726,7 +777,7 @@ export default function App() {
   else if (auth === 'forgot') device = <ForgotFlow onBack={() => setAuth('login')} onDone={() => setAuth('login')} />;
   else device = (
     <div className="inh-app">
-      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} />
+      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} profile={me} />
       <div className="inh-main">
         {header()}
         {body()}
@@ -735,6 +786,8 @@ export default function App() {
       {sheet === 'property' && <PropertySheet role={role} projects={projects} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <InviteSheet onClose={() => setSheet(null)} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
+      {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
+      {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}

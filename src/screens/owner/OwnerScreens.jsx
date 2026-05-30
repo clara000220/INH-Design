@@ -5,6 +5,7 @@ import { Btn, Pill, ProgressBar, Avatar, RoleBadge, Dialog, Sheet } from '../../
 import { Field } from '../auth/Auth.jsx';
 import { INH_DATA, rm, rmk } from '../../data/data.js';
 import { CAN_EDIT } from '../core/CoreScreens.jsx';
+import { t } from '../../lib/i18n.js';
 
 /* =================== PROJECTS LIST (admin & owner home) =================== */
 export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProject, onAddProject }) {
@@ -229,10 +230,20 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 
 /* =================== USERS DIRECTORY (owner, under More) =================== */
 export function UsersScreen({ users = INH_DATA.users, onInvite }) {
+  const count = users.length;
   return (
     <div className="inh-scroll">
       <div className="inh-pad">
-        <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>Invite user</Btn>
+        <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>{t('Invite user')}</Btn>
+        <div className="inh-hero" style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="users" size={24} color="var(--inh-lime)" />
+          </div>
+          <div>
+            <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 30, lineHeight: 1 }}>{count}</div>
+            <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginTop: 4 }}>{count === 1 ? t('user') : t('users')} {t('registered')}</div>
+          </div>
+        </div>
         <div className="inh-card" style={{ overflow: 'hidden' }}>
           {users.map(u => (
             <div key={u.id} className="inh-row">
@@ -360,7 +371,7 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
 }
 
 /* =================== MORE =================== */
-export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditName }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta.person;
   const initials = profile?.initials || meta.initials;
@@ -388,33 +399,33 @@ export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditNa
 
         {role === 'owner' && (
           <div>
-            <div className="inh-section">Owner tools</div>
+            <div className="inh-section">{t('Owner tools')}</div>
             <Group>
-              <Item icon="users" label="Users" tint="var(--inh-lime-tint)" onClick={onUsers} />
-              <Item icon="shield-check" label="Team & Access" tint="var(--inh-lime-tint)" onClick={onTeam} />
+              <Item icon="users" label={t('Users')} tint="var(--inh-lime-tint)" onClick={onUsers} />
+              <Item icon="shield-check" label={t('Team & Access')} tint="var(--inh-lime-tint)" onClick={onTeam} />
             </Group>
           </div>
         )}
 
         <div>
-          <div className="inh-section">{role === 'homeowner' ? 'My home' : 'Projects'}</div>
+          <div className="inh-section">{role === 'homeowner' ? t('My home') : t('Projects')}</div>
           <Group>
-            <Item icon="building" label={role === 'homeowner' ? 'My properties' : 'All projects'} />
-            <Item icon="message-circle" label="Project contacts" />
-            {CAN_EDIT(role) && <Item icon="image" label="Manage updates" />}
+            <Item icon="building" label={role === 'homeowner' ? t('My properties') : t('All projects')} onClick={onAllProjects} />
+            <Item icon="message-circle" label={t('Project contacts')} onClick={onTeam} />
+            {CAN_EDIT(role) && <Item icon="image" label={t('Manage updates')} onClick={onManageUpdates} />}
           </Group>
         </div>
 
         <div>
-          <div className="inh-section">Account</div>
+          <div className="inh-section">{t('Account')}</div>
           <Group>
-            <Item icon="user" label="Edit my name" onClick={onEditName} />
-            <Item icon="settings" label="Settings & language" />
-            <Item icon="help-circle" label="Support" />
+            <Item icon="user" label={t('Edit my name')} onClick={onEditName} />
+            <Item icon="settings" label={t('Settings & language')} onClick={onSettings} />
+            <Item icon="help-circle" label={t('Support')} onClick={onSupport} />
           </Group>
         </div>
 
-        <Group><Item icon="log-out" label="Sign out" danger onClick={onSignOut} /></Group>
+        <Group><Item icon="log-out" label={t('Sign out')} danger onClick={onSignOut} /></Group>
         <p className="meta" style={{ textAlign: 'center' }}>INH Project Management v2.1</p>
       </div>
     </div>

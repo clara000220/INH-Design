@@ -1,6 +1,7 @@
 /* INH — shared primitives */
 import { Icon } from './Icon.jsx';
 import { INH_DATA } from '../data/data.js';
+import { t } from '../lib/i18n.js';
 
 export const STATUS_PILL = {
   released:  ['pill-released',  'Released'],
@@ -56,8 +57,9 @@ export function Avatar({ initials, size = 40, light }) {
 }
 
 /* App header: eyebrow + title + optional property dropdown + avatar/bell */
-export function AppHeader({ eyebrow, title, property, onProperty, role, onBell, onAvatar, back }) {
+export function AppHeader({ eyebrow, title, property, onProperty, role, profile, onBell, onAvatar, back }) {
   const meta = INH_DATA.roleMeta[role];
+  const initials = profile?.initials || meta?.initials;
   return (
     <div className="inh-header">
       {back && (
@@ -81,7 +83,7 @@ export function AppHeader({ eyebrow, title, property, onProperty, role, onBell, 
           <Icon name="bell" size={20} /><span className="dot" />
         </button>
       )}
-      {meta && <div className="inh-avatar" onClick={onAvatar}>{meta.initials}</div>}
+      {initials && <div className="inh-avatar" onClick={onAvatar}>{initials}</div>}
     </div>
   );
 }
@@ -109,9 +111,11 @@ export const TAB_DEFS = {
 };
 
 /* Desktop sidebar — replaces the bottom tab bar at >=960px */
-export function Sidebar({ role, active, onChange, onSignOut }) {
+export function Sidebar({ role, active, onChange, onSignOut, profile }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   const meta = INH_DATA.roleMeta[role];
+  const name = profile?.name || meta?.person;
+  const initials = profile?.initials || meta?.initials;
   return (
     <aside className="inh-sidebar">
       <div className="inh-sidebar__brand">
@@ -119,19 +123,19 @@ export function Sidebar({ role, active, onChange, onSignOut }) {
         <span>INH</span>
       </div>
       <nav className="inh-sidebar__nav">
-        {tabs.map(t => (
-          <button key={t.id} className={'inh-navitem' + (active === t.id ? ' active' : '')} onClick={() => onChange(t.id)}>
-            <Icon name={t.icon} size={20} stroke={active === t.id ? 2.2 : 2} />
-            <span>{t.label}</span>
+        {tabs.map(tab => (
+          <button key={tab.id} className={'inh-navitem' + (active === tab.id ? ' active' : '')} onClick={() => onChange(tab.id)}>
+            <Icon name={tab.icon} size={20} stroke={active === tab.id ? 2.2 : 2} />
+            <span>{t(tab.label)}</span>
           </button>
         ))}
       </nav>
-      {meta && (
+      {(name || initials) && (
         <div className="inh-sidebar__foot">
-          <div className="inh-avatar">{meta.initials}</div>
+          <div className="inh-avatar">{initials}</div>
           <div className="inh-sidebar__who">
-            <div className="inh-sidebar__name">{meta.person}</div>
-            <div className="inh-sidebar__role">{meta.label}</div>
+            <div className="inh-sidebar__name">{name}</div>
+            <div className="inh-sidebar__role">{meta?.label}</div>
           </div>
           {onSignOut && (
             <button className="inh-iconbtn" style={{ width: 34, height: 34 }} onClick={onSignOut} aria-label="Sign out">
@@ -148,10 +152,10 @@ export function TabBar({ role, active, onChange }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   return (
     <div className="inh-tabbar">
-      {tabs.map(t => (
-        <button key={t.id} className={'inh-tab' + (active === t.id ? ' active' : '')} onClick={() => onChange(t.id)}>
-          <span className="inh-tab__ico"><Icon name={t.icon} size={21} stroke={active === t.id ? 2.2 : 2} /></span>
-          <span>{t.label}</span>
+      {tabs.map(tab => (
+        <button key={tab.id} className={'inh-tab' + (active === tab.id ? ' active' : '')} onClick={() => onChange(tab.id)}>
+          <span className="inh-tab__ico"><Icon name={tab.icon} size={21} stroke={active === tab.id ? 2.2 : 2} /></span>
+          <span>{t(tab.label)}</span>
         </button>
       ))}
     </div>
