@@ -749,6 +749,18 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleAddItem = async (phase, title) => {
+    if (!IS_LIVE) return;
+    await api.addPhaseTask(phase.id, activeProjectId, title);
+    await loadDetail(activeProjectId);
+  };
+
+  const handleTaskPhotoUpload = async (taskId, room, files = []) => {
+    if (!IS_LIVE) return;
+    await api.uploadTaskPhotos(activeProjectId, taskId, room, files);
+    await loadDetail(activeProjectId);
+  };
+
   const handleToggleSchedule = async (item) => {
     if (!IS_LIVE) return;
     const next = item.state === 'completed' ? 'upcoming' : 'completed';
@@ -849,7 +861,8 @@ export default function App() {
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
-          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
+          onAddItem={CAN_EDIT(role) ? handleAddItem : null}
+          onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
@@ -876,7 +889,8 @@ export default function App() {
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
-          onAddPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
+          onAddItem={CAN_EDIT(role) ? handleAddItem : null}
+          onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
@@ -925,7 +939,8 @@ export default function App() {
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}
       {sheet === 'addPhase' && <AddPhaseSheet onClose={() => setSheet(null)} onSave={handleAddPhase} />}
       {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
-      {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)} onAdd={handleAddUpdate} />}
+      {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)}
+        onAdd={photo.taskId ? ((room, files) => handleTaskPhotoUpload(photo.taskId, room, files)) : handleAddUpdate} />}
       {task && <TaskDetailSheet task={task} projectId={activeProjectId} onClose={() => setTask(null)}
         onChanged={CAN_EDIT(role) ? (() => loadDetail(activeProjectId)) : null} />}
     </div>

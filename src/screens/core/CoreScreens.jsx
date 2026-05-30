@@ -28,8 +28,9 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddPhasePhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask }) {
   const [open, setOpen] = useState(2);
+  const [itemDraft, setItemDraft] = useState('');
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
     : '20 Jun';
@@ -125,20 +126,28 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           </div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
             {phases.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No phases added yet.</div></div></div>}
-            {phases.map((p, i) => (
+            {phases.map((p, i) => {
+              const tasks = p.tasks || [];
+              const total = tasks.length;
+              const doneN = tasks.filter(t => t.done).length;
+              // Progress derives from item completion when the phase has items.
+              const derivedPct = total ? Math.round((doneN / total) * 100) : p.pct;
+              const isDone = p.status === 'completed' || (total > 0 && doneN === total);
+              const editable = CAN_EDIT(role);
+              return (
               <div key={i} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
                 <div className="inh-row" onClick={() => setOpen(open === i ? -1 : i)} style={{ paddingTop: 13, paddingBottom: 13 }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: p.status === 'completed' ? 'var(--success)' : p.status === 'progress' ? 'var(--inh-lime)' : 'var(--surface-2)',
-                    color: p.status === 'completed' ? '#fff' : 'var(--inh-charcoal)' }}>
-                    {p.status === 'completed' ? <Icon name="check" size={15} stroke={3} /> :
+                    background: isDone ? 'var(--success)' : (derivedPct > 0 || p.status === 'progress') ? 'var(--inh-lime)' : 'var(--surface-2)',
+                    color: isDone ? '#fff' : 'var(--inh-charcoal)' }}>
+                    {isDone ? <Icon name="check" size={15} stroke={3} /> :
                       <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12 }}>{i + 1}</span>}
                   </div>
                   <div className="inh-row__main">
                     <div className="inh-row__title" style={{ fontSize: 14.5 }}>{p.name}</div>
-                    <div className="inh-row__sub">{p.dates}</div>
+                    <div className="inh-row__sub">{total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates}</div>
                   </div>
-                  {CAN_EDIT(role) && onMovePhase && (
+                  {editable && onMovePhase && (
                     <div style={{ display: 'flex', flexDirection: 'column', marginRight: 4 }} onClick={e => e.stopPropagation()}>
                       <button onClick={() => i > 0 && onMovePhase(i, i - 1)} disabled={i === 0} aria-label="Move phase up"
                         style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 1, display: 'flex' }}>
@@ -154,76 +163,90 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 </div>
                 {open === i && (
                   <div style={{ padding: '0 16px 16px 56px' }}>
-                    <ProgressBar pct={p.pct} green={p.status === 'completed'} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                      <span className="meta">{p.status === 'completed' ? 'Done' : `${p.pct}% complete`}</span>
+                    <ProgressBar pct={derivedPct} green={isDone} />
+                    <div style={{ marginTop: 8 }}>
+                      <span className="meta">{isDone ? 'All items done' : total ? `${doneN} of ${total} items done` : `${derivedPct}% complete`}</span>
                     </div>
-                    {(p.tasks || []).length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 10 }}>
-                        {p.tasks.map((t, ti) => (
-                          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 0' }}>
-                            <button
-                              onClick={() => CAN_EDIT(role) && onTogglePhaseTask && onTogglePhaseTask(t)}
-                              aria-label="Toggle sub-task"
-                              style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: CAN_EDIT(role) && onTogglePhaseTask ? 'pointer' : 'default' }}>
-                              <Icon name={t.done ? 'check-circle' : 'circle'} size={18} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />
+
+                    {/* Items — each can be ticked, photographed, or opened for remark/photos */}
+                    <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10 }}>
+                      {tasks.map((t, ti) => (
+                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: ti ? '1px solid var(--border)' : 'none' }}>
+                          <button onClick={() => editable && onTogglePhaseTask && onTogglePhaseTask(t)} aria-label="Toggle item"
+                            style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: editable && onTogglePhaseTask ? 'pointer' : 'default' }}>
+                            <Icon name={t.done ? 'check-circle' : 'circle'} size={19} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />
+                          </button>
+                          <button onClick={() => onOpenTask && onOpenTask(t)}
+                            style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: onOpenTask ? 'pointer' : 'default', minWidth: 0 }}>
+                            <span style={{ flex: 1, fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                            {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
+                          </button>
+                          {editable && onItemPhoto && (
+                            <button onClick={() => onItemPhoto(t)} aria-label="Add photo to item"
+                              style={{ border: '1px solid var(--border-strong)', background: 'var(--surface)', borderRadius: 8, padding: '5px 7px', cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+                              <Icon name="camera" size={15} color="var(--fg-2)" />
                             </button>
-                            <button onClick={() => onOpenTask && onOpenTask(t)}
-                              style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: onOpenTask ? 'pointer' : 'default' }}>
-                              <span style={{ flex: 1, fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none' }}>{t.title}</span>
-                              {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
-                              {onOpenTask && <Icon name="chevron-right" size={15} color="var(--fg-3)" />}
+                          )}
+                          {onOpenTask && (
+                            <button onClick={() => onOpenTask(t)} aria-label="Open item"
+                              style={{ border: 'none', background: 'transparent', padding: 2, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+                              <Icon name="chevron-right" size={16} color="var(--fg-3)" />
                             </button>
-                            {CAN_EDIT(role) && onMoveTask && (
-                              <div style={{ display: 'flex', flexShrink: 0 }}>
-                                <button onClick={() => ti > 0 && onMoveTask(p, ti, ti - 1)} disabled={ti === 0} aria-label="Move sub-task up"
-                                  style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === 0 ? 'default' : 'pointer', opacity: ti === 0 ? 0.25 : 1, display: 'flex' }}>
-                                  <Icon name="chevron-up" size={15} color="var(--fg-3)" stroke={2.4} />
-                                </button>
-                                <button onClick={() => ti < p.tasks.length - 1 && onMoveTask(p, ti, ti + 1)} disabled={ti === p.tasks.length - 1} aria-label="Move sub-task down"
-                                  style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === p.tasks.length - 1 ? 'default' : 'pointer', opacity: ti === p.tasks.length - 1 ? 0.25 : 1, display: 'flex' }}>
-                                  <Icon name="chevron-down" size={15} color="var(--fg-3)" stroke={2.4} />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                          )}
+                          {editable && onMoveTask && (
+                            <div style={{ display: 'flex', flexShrink: 0 }}>
+                              <button onClick={() => ti > 0 && onMoveTask(p, ti, ti - 1)} disabled={ti === 0} aria-label="Move item up"
+                                style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === 0 ? 'default' : 'pointer', opacity: ti === 0 ? 0.25 : 1, display: 'flex' }}>
+                                <Icon name="chevron-up" size={14} color="var(--fg-3)" stroke={2.4} />
+                              </button>
+                              <button onClick={() => ti < total - 1 && onMoveTask(p, ti, ti + 1)} disabled={ti === total - 1} aria-label="Move item down"
+                                style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === total - 1 ? 'default' : 'pointer', opacity: ti === total - 1 ? 0.25 : 1, display: 'flex' }}>
+                                <Icon name="chevron-down" size={14} color="var(--fg-3)" stroke={2.4} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {total === 0 && <div className="meta" style={{ padding: '4px 0' }}>No items yet. Add the tasks for this phase below.</div>}
+                    </div>
+
+                    {/* Add an item to this phase */}
+                    {editable && onAddItem && (
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <div className="inh-input" style={{ flex: 1 }}>
+                          <span className="lead"><Icon name="plus" size={16} /></span>
+                          <input value={open === i ? itemDraft : ''} placeholder="Add an item…"
+                            onChange={e => setItemDraft(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && itemDraft.trim()) { e.preventDefault(); onAddItem(p, itemDraft.trim()); setItemDraft(''); } }} />
+                        </div>
+                        <button onClick={() => { if (itemDraft.trim()) { onAddItem(p, itemDraft.trim()); setItemDraft(''); } }} disabled={!itemDraft.trim()} aria-label="Add item"
+                          style={{ flexShrink: 0, width: 44, borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', cursor: itemDraft.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name="plus" size={18} color="var(--fg-1)" />
+                        </button>
                       </div>
                     )}
-                    {CAN_EDIT(role) && (onAddPhasePhoto || onMarkPhaseComplete) && (
-                      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                        {onAddPhasePhoto && (
-                          <button onClick={() => onAddPhasePhoto(p)} style={{
-                            display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border-strong)',
-                            background: 'var(--surface)', color: 'var(--fg-1)', borderRadius: 10, padding: '8px 12px',
-                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                          }}>
-                            <Icon name="camera" size={15} color="var(--fg-2)" /> Add photos
-                          </button>
-                        )}
-                        {onMarkPhaseComplete && p.status !== 'completed' && (
-                          <button onClick={() => onMarkPhaseComplete(p)} style={{
-                            display: 'flex', alignItems: 'center', gap: 6, border: 'none',
-                            background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '8px 12px',
-                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                          }}>
-                            <Icon name="check-circle" size={15} color="var(--inh-charcoal)" /> Mark complete
-                          </button>
-                        )}
-                        {p.status === 'completed' && (
-                          <span style={{
-                            display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)',
-                            fontWeight: 700, fontSize: 12.5, padding: '8px 0',
-                          }}>
-                            <Icon name="check-circle" size={15} color="var(--success)" /> Completed
-                          </span>
-                        )}
+
+                    {editable && onMarkPhaseComplete && !isDone && (
+                      <div style={{ marginTop: 12 }}>
+                        <button onClick={() => onMarkPhaseComplete(p)} style={{
+                          display: 'flex', alignItems: 'center', gap: 6, border: 'none',
+                          background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '8px 12px',
+                          fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                        }}>
+                          <Icon name="check-circle" size={15} color="var(--inh-charcoal)" /> Mark phase complete
+                        </button>
+                      </div>
+                    )}
+                    {isDone && (
+                      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
+                        <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
