@@ -659,8 +659,11 @@ export default function App() {
   const top = stack[stack.length - 1];
 
   const currentProject = projects[0];
-  const activeProject = top?.project || currentProject;
-  const activeProjectId = activeProject?.id;
+  const baseProject = top?.project || currentProject;
+  const activeProjectId = baseProject?.id;
+  // Always resolve the freshest copy from the loaded list so the hero reflects
+  // edits / auto-calculated progress (the stack only holds a snapshot).
+  const activeProject = projects.find(p => p.id === activeProjectId) || baseProject;
   const live = v => (IS_LIVE ? (v ?? []) : undefined);   // demo → undefined → screen uses INH_DATA defaults
 
   // Real signed-in identity for the chrome (sidebar foot + header avatar).
@@ -712,6 +715,22 @@ export default function App() {
     ]);
     const [phases, schedule, updates, documents, payments, members] = r.map(x => (x.status === 'fulfilled' ? x.value : []));
     setDetail({ projectId, phases, schedule, updates, documents, payments, members });
+  };
+
+  // After an item changes, recompute the project's overall progress from item
+  // completion and persist it, then refresh the detail + project list.
+  const refreshAfterItemChange = async () => {
+    if (!IS_LIVE) return;
+    try {
+      const phases = await api.listPhases(activeProjectId);
+      const totals = phases.reduce((a, p) => {
+        const tks = p.tasks || [];
+        return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length };
+      }, { t: 0, d: 0 });
+      if (totals.t > 0) await api.updateProjectProgress(activeProjectId, Math.round((totals.d / totals.t) * 100));
+    } catch (e) { /* display still derives from items */ }
+    await loadDetail(activeProjectId);
+    await reloadTop();
   };
 
   // Real auth: restore any persisted session and react to sign in/out.
@@ -866,7 +885,7 @@ export default function App() {
   const handleAddItem = async (phase, title) => {
     if (!IS_LIVE) return;
     await api.addPhaseTask(phase.id, activeProjectId, title);
-    await loadDetail(activeProjectId);
+    await refreshAfterItemChange();
   };
 
   const handleTaskPhotoUpload = async (taskId, room, files = []) => {
@@ -895,13 +914,13 @@ export default function App() {
   const handleDeletePhase = (phase) => setConfirm({
     title: 'Delete this phase?',
     body: `"${phase.name}" and all its items will be permanently removed.`,
-    onYes: async () => { await api.deletePhase(phase.id); await loadDetail(activeProjectId); },
+    onYes: async () => { await api.deletePhase(phase.id); await refreshAfterItemChange(); },
   });
 
   const handleDeleteTask = (task) => setConfirm({
     title: 'Delete this item?',
     body: `"${task.title}" and its photos/remark will be removed.`,
-    onYes: async () => { await api.deletePhaseTask(task.id); setTask(null); await loadDetail(activeProjectId); },
+    onYes: async () => { await api.deletePhaseTask(task.id); setTask(null); await refreshAfterItemChange(); },
   });
 
   const handleToggleSchedule = async (item) => {
@@ -917,7 +936,7 @@ export default function App() {
   const handleTogglePhaseTask = async (task) => {
     if (!IS_LIVE) return;
     await api.setPhaseTaskDone(task.id, !task.done);
-    await loadDetail(activeProjectId);
+    await refreshAfterItemChange();
   };
 
   const handleMovePhase = async (from, to) => {
@@ -1002,7 +1021,7 @@ export default function App() {
   const body = () => {
     if (top) {
       if (top.type === 'overview')
-        return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={mergedSchedule}
+        return <OverviewScreen role={role} project={activeProject} phases={live(detail?.phases)} schedule={mergedSchedule}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
           onEditProject={CAN_EDIT(role) ? () => setSheet('editProject') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
@@ -1017,6 +1036,7 @@ export default function App() {
           onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
           onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
+          onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
@@ -1049,6 +1069,7 @@ export default function App() {
           onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
           onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
+          onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}

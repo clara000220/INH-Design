@@ -4,7 +4,7 @@ import { Icon } from '../../components/Icon.jsx';
 import { Btn, Pill, ProgressBar, Avatar, RoleBadge, Dialog, Sheet } from '../../components/primitives.jsx';
 import { Field } from '../auth/Auth.jsx';
 import { INH_DATA, rm, rmk } from '../../data/data.js';
-import { CAN_EDIT } from '../core/CoreScreens.jsx';
+import { CAN_EDIT, projectStatus } from '../core/CoreScreens.jsx';
 import { t } from '../../lib/i18n.js';
 
 /* =================== PROJECTS LIST (admin & owner home) =================== */
@@ -30,7 +30,7 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17 }}>{p.name}</div>
                 <div className="inh-row__sub">{p.code} · {p.type}</div>
               </div>
-              <Pill status={p.status} />
+              <Pill status={projectStatus(p)} />
             </div>
             <div style={{ margin: '16px 0 8px' }}><ProgressBar pct={p.progress} green={p.progress === 100} /></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>

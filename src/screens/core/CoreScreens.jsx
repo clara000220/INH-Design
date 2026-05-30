@@ -6,6 +6,15 @@ import { INH_DATA } from '../../data/data.js';
 
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
+// Status derived from progress + est. handover date (overdue is date-driven).
+export function projectStatus(p) {
+  const pct = p?.progress ?? 0;
+  if (pct >= 100) return 'completed';
+  const h = p?.est_handover ? new Date(p.est_handover) : null;
+  if (h && !isNaN(h)) { const today = new Date(); today.setHours(0, 0, 0, 0); if (h < today) return 'overdue'; }
+  return p?.status && p.status !== 'overdue' ? p.status : 'ontrack';
+}
+
 /* ---- shared placeholder photo tile (drop real renovation photos here) ---- */
 export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
   return (
@@ -28,7 +37,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -36,6 +45,23 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
     : '20 Jun';
+
+  // Overall progress auto-derives from item completion when items exist.
+  const itemTotals = (phases || []).reduce((a, p) => {
+    const tks = p.tasks || [];
+    return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length };
+  }, { t: 0, d: 0 });
+  const hasItems = itemTotals.t > 0;
+  const overallPct = hasItems ? Math.round((itemTotals.d / itemTotals.t) * 100) : (project?.progress ?? 0);
+  // "Overdue" is tied to the project's est. handover date, not a manual flag.
+  const overdue = (() => {
+    const h = project?.est_handover ? new Date(project.est_handover) : null;
+    if (!h || isNaN(h)) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return h < today;
+  })();
+  const derivedStatus = overallPct >= 100 ? 'completed' : (overdue ? 'overdue' : 'ontrack');
+
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -52,22 +78,28 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', margin: '6px 0 12px' }}>
-            <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 52 }}>{project.progress}%</div>
-            <Pill status={project.status} />
+            <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 52 }}>{overallPct}%</div>
+            <Pill status={derivedStatus} />
           </div>
-          <ProgressBar pct={project.progress} dark />
+          <ProgressBar pct={overallPct} dark green={overallPct >= 100} />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, color: 'var(--on-dark-2)', fontSize: 12.5 }}>
             <span>{project?.type || 'Renovation project'}</span>
             <span>Est. handover · {handover}</span>
           </div>
-          {CAN_EDIT(role) && onEditProgress && (
-            <button onClick={onEditProgress} style={{
-              marginTop: 16, width: '100%', border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)',
-              color: 'var(--inh-lime)', borderRadius: 12, padding: '11px 14px', fontWeight: 700, fontSize: 13.5,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            }}>
-              <Icon name="check-circle" size={16} color="var(--inh-lime)" /> Update overall progress
-            </button>
+          {CAN_EDIT(role) && (
+            hasItems ? (
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, color: 'var(--on-dark-2)', fontSize: 12.5, fontWeight: 600 }}>
+                <Icon name="check-circle" size={15} color="var(--on-dark-2)" /> Auto-calculated from {itemTotals.d}/{itemTotals.t} items
+              </div>
+            ) : onEditProgress && (
+              <button onClick={onEditProgress} style={{
+                marginTop: 16, width: '100%', border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)',
+                color: 'var(--inh-lime)', borderRadius: 12, padding: '11px 14px', fontWeight: 700, fontSize: 13.5,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              }}>
+                <Icon name="check-circle" size={16} color="var(--inh-lime)" /> Update overall progress
+              </button>
+            )
           )}
         </div>
 
@@ -190,6 +222,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       </div>
                     </div>
                   )}
+                  {editable && onDeletePhase && (
+                    <button onClick={e => { e.stopPropagation(); onDeletePhase(p); }} aria-label="Delete phase"
+                      style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', marginRight: 2 }}>
+                      <Icon name="trash" size={15} color="var(--fg-3)" />
+                    </button>
+                  )}
                   <Icon name="chevron-down" size={18} color="var(--fg-3)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
                 </div>
                 {open === i && (
@@ -226,6 +264,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                             <button onClick={() => onOpenTask(t)} aria-label="Open item"
                               style={{ border: 'none', background: 'transparent', padding: 2, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
                               <Icon name="chevron-right" size={16} color="var(--fg-3)" />
+                            </button>
+                          )}
+                          {editable && onDeleteItem && (
+                            <button onClick={() => onDeleteItem(t)} aria-label="Delete item"
+                              style={{ border: 'none', background: 'transparent', padding: 3, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+                              <Icon name="trash" size={14} color="var(--fg-3)" />
                             </button>
                           )}
                           {editable && onMoveTask && (
@@ -280,12 +324,6 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
                         <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
                       </div>
-                    )}
-                    {editable && onDeletePhase && (
-                      <button onClick={() => onDeletePhase(p)}
-                        style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 }}>
-                        <Icon name="trash" size={14} color="var(--error)" /> Delete phase
-                      </button>
                     )}
                   </div>
                 )}
