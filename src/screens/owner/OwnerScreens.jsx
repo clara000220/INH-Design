@@ -431,7 +431,7 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], o
 }
 
 /* =================== MORE =================== */
-export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta.person;
   const initials = profile?.initials || meta.initials;
@@ -463,6 +463,15 @@ export function MoreScreen({ role, profile, onUsers, onTeam, onSignOut, onEditNa
             <Group>
               <Item icon="users" label={t('Users')} tint="var(--inh-lime-tint)" onClick={onUsers} />
               <Item icon="shield-check" label={t('Team & Access')} tint="var(--inh-lime-tint)" onClick={onTeam} />
+            </Group>
+          </div>
+        )}
+
+        {role === 'admin' && onAddAccount && (
+          <div>
+            <div className="inh-section">{t('Staff tools')}</div>
+            <Group>
+              <Item icon="user-plus" label={t('Add account')} tint="var(--inh-lime-tint)" onClick={onAddAccount} />
             </Group>
           </div>
         )}

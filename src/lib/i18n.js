@@ -33,6 +33,7 @@ const MS = {
   'More': 'Lagi',
   // More — sections
   'Owner tools': 'Alat Pemilik',
+  'Staff tools': 'Alat Kakitangan',
   'My home': 'Rumah Saya',
   'Account': 'Akaun',
   // More — items
@@ -73,6 +74,7 @@ const ZH = {
   'More': '更多',
   // More — sections
   'Owner tools': '业主工具',
+  'Staff tools': '员工工具',
   'My home': '我的住宅',
   'Account': '账户',
   // More — items

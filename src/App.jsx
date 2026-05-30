@@ -185,7 +185,9 @@ function genPassword() {
   return `Inh-${n}-${w}`;
 }
 
-function AddAccountSheet({ onClose, onCreate }) {
+function AddAccountSheet({ onClose, onCreate, callerRole = 'owner' }) {
+  // Owners may create admins or homeowners; admins may only create homeowners.
+  const allowedRoles = callerRole === 'owner' ? ['admin', 'homeowner'] : ['homeowner'];
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState(genPassword());
@@ -247,11 +249,15 @@ function AddAccountSheet({ onClose, onCreate }) {
         </div>
         <div>
           <label className="inh-label">Role</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['admin', 'homeowner'].map(r => (
-              <button key={r} onClick={() => setRole(r)} className={'inh-chip' + (role === r ? ' active' : '')} style={{ flex: 1, textTransform: 'capitalize' }}>{r}</button>
-            ))}
-          </div>
+          {allowedRoles.length > 1 ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              {allowedRoles.map(r => (
+                <button key={r} onClick={() => setRole(r)} className={'inh-chip' + (role === r ? ' active' : '')} style={{ flex: 1, textTransform: 'capitalize' }}>{r}</button>
+              ))}
+            </div>
+          ) : (
+            <p className="body-2">New accounts are added as <b style={{ color: 'var(--fg-1)' }}>homeowners</b>.</p>
+          )}
         </div>
       </div>
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
@@ -882,6 +888,7 @@ export default function App() {
     if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
     if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
+      onAddAccount={IS_LIVE ? () => setSheet('invite') : null}
       onSignOut={signOut} onEditName={() => setSheet('editName')}
       onSettings={() => setSheet('settings')} onSupport={() => setSheet('support')}
       onAllProjects={() => { setTab('home'); setStack([]); }}
@@ -903,7 +910,7 @@ export default function App() {
         <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
       </div>
       {sheet === 'property' && <PropertySheet role={role} projects={projects} onClose={() => setSheet(null)} />}
-      {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} />}
+      {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
