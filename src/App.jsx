@@ -205,7 +205,7 @@ function AddAccountSheet({ onClose, onCreate, callerRole = 'owner' }) {
     try {
       // normalizeLogin turns a bare username into a synthetic email so Supabase
       // accepts it; the sign-in screen applies the same mapping.
-      await onCreate({ email: normalizeLogin(email), password: pw, fullName: name.trim(), role });
+      await onCreate({ email: normalizeLogin(email), login: email.trim(), password: pw, fullName: name.trim(), role });
       setDone({ login: email.trim(), pw });
     } catch (e) { setErr(e?.message || 'Could not create account'); }
     finally { setBusy(false); }
@@ -590,12 +590,12 @@ export default function App() {
     if (!IS_LIVE) return;
     const r = await Promise.allSettled([
       api.listProjects(), api.getMyProfile(), api.listUsers(),
-      api.listHomeowners(), api.listProjectFees(), api.listAudit(),
+      api.listHomeowners(), api.listProjectFees(), api.listAudit(), api.listCredentials(),
     ]);
-    const [p, pr, us, ho, fe, au] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    const [p, pr, us, ho, fe, au, cr] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
     if (p) setProjects(p);
     if (pr) setProfile(pr);
-    if (us) setUsers(us);
+    if (us) setUsers(cr ? us.map(u => ({ ...u, ...(cr[u.id] || {}) })) : us);
     if (ho) setHomeowners(ho);
     if (fe) setFees(fe);
     if (au) setAudit(au);
@@ -691,9 +691,15 @@ export default function App() {
     await reloadTop();
   };
 
-  const handleAddAccount = async ({ email, password, fullName, role }) => {
+  const handleAddAccount = async ({ email, login, password, fullName, role }) => {
     if (!IS_LIVE) return;
-    await api.adminCreateUser({ email, password, fullName, role });
+    const res = await api.adminCreateUser({ email, password, fullName, role });
+    // Store the login + temp password (owner-visible) so it can be looked up
+    // later. Don't fail the whole flow if this can't be saved.
+    if (res?.userId) {
+      try { await api.saveCredential(res.userId, login || email, password); }
+      catch (e) { console.warn('Could not store credential:', e?.message); }
+    }
     await reloadTop();
   };
 

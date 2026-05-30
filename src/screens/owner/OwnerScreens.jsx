@@ -236,7 +236,12 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, me
   const [edit, setEdit] = useState(null);   // user being edited
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [revealed, setRevealed] = useState(() => new Set());
+  const [copied, setCopied] = useState(null);
   const canEdit = !!onChangeRole;           // live + owner
+
+  const toggleReveal = (id) => setRevealed(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const copy = (id, text) => { try { navigator.clipboard?.writeText(text); setCopied(id); setTimeout(() => setCopied(c => (c === id ? null : c)), 1500); } catch { /* ignore */ } };
 
   const apply = async (role) => {
     if (!edit || role === edit.role) { setEdit(null); return; }
@@ -270,6 +275,23 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, me
                 <div className="inh-row__main">
                   <div className="inh-row__title" style={{ fontSize: 14.5 }}>{u.name}{isMe && <span className="inh-row__sub" style={{ marginLeft: 6 }}>(you)</span>}</div>
                   <div className="inh-row__sub">{u.contact} · {u.projects} {u.projects === 1 ? 'project' : 'projects'}</div>
+                  {u.tempPassword && (
+                    <div style={{ marginTop: 7, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+                      <span className="inh-chip" style={{ padding: '3px 9px', fontSize: 11.5 }}>ID: {u.login || u.contact}</span>
+                      <span className="inh-chip" style={{ padding: '3px 9px', fontSize: 11.5, fontFamily: 'var(--font-display)', letterSpacing: 0.3, minWidth: 78, textAlign: 'center' }}>
+                        {revealed.has(u.id) ? u.tempPassword : '••••••••'}
+                      </span>
+                      <button onClick={() => toggleReveal(u.id)} aria-label={revealed.has(u.id) ? 'Hide password' : 'Show password'}
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                        <Icon name={revealed.has(u.id) ? 'eye-off' : 'eye'} size={15} color="var(--fg-3)" />
+                      </button>
+                      <button onClick={() => copy(u.id, u.tempPassword)} aria-label="Copy password"
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3, alignItems: 'center', gap: 4 }}>
+                        <Icon name="copy" size={14} color="var(--fg-3)" />
+                        {copied === u.id && <span style={{ fontSize: 11, color: 'var(--success)', fontWeight: 600 }}>Copied</span>}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   <RoleBadge role={u.role} />

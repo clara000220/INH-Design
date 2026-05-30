@@ -377,6 +377,25 @@ export async function adminCreateUser({ email, password, fullName, role = 'homeo
   return data;
 }
 
+// Store the login + temporary password for an account just created, so the
+// owner can look them up later. RLS limits SELECT to the owner.
+export async function saveCredential(userId, login, tempPassword) {
+  const { error } = await supabase.from('account_credentials')
+    .upsert({ user_id: userId, login, temp_password: tempPassword });
+  if (error) throw error;
+}
+
+// Owner-only: map of user_id -> { login, tempPassword }. Returns {} for
+// non-owners (RLS filters the rows out).
+export async function listCredentials() {
+  const { data, error } = await supabase.from('account_credentials')
+    .select('user_id, login, temp_password');
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach(c => { map[c.user_id] = { login: c.login, tempPassword: c.temp_password }; });
+  return map;
+}
+
 // Owner-only: change a user's role. RLS (profiles_owner_all) + the
 // guard_profile_role trigger enforce that only an owner can do this server-side.
 export async function setUserRole(userId, role) {
