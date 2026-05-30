@@ -11,11 +11,14 @@ let current = (hasWindow && localStorage.getItem(KEY)) || 'en';
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
   { code: 'ms', label: 'Bahasa Melayu' },
+  { code: 'zh', label: '中文' },
 ];
+
+const CODES = LANGUAGES.map(l => l.code);
 
 export function getLang() { return current; }
 export function setLang(code) {
-  current = code === 'ms' ? 'ms' : 'en';
+  current = CODES.includes(code) ? code : 'en';
   if (hasWindow) localStorage.setItem(KEY, current);
 }
 
@@ -57,7 +60,47 @@ const MS = {
   'Email support': 'E-mel sokongan',
 };
 
+// English source -> Chinese (Simplified). Anything missing falls back to English.
+const ZH = {
+  // nav / tabs
+  'Projects': '项目',
+  'Overview': '概览',
+  'Updates': '进度更新',
+  'Documents': '文件',
+  'Fees': '费用',
+  'More': '更多',
+  // More — sections
+  'Owner tools': '业主工具',
+  'My home': '我的住宅',
+  'Account': '账户',
+  // More — items
+  'Users': '用户',
+  'Team & Access': '团队与权限',
+  'All projects': '所有项目',
+  'My properties': '我的房产',
+  'Project contacts': '项目联系人',
+  'Manage updates': '管理更新',
+  'Edit my name': '编辑我的名字',
+  'Settings & language': '设置与语言',
+  'Support': '支持',
+  'Sign out': '退出登录',
+  // Users screen
+  'Invite user': '邀请用户',
+  'registered': '已注册',
+  'user': '位用户',
+  'users': '位用户',
+  // Settings sheet
+  'Language': '语言',
+  'Choose the language for the app.': '选择应用程序的语言。',
+  // Support sheet
+  'Need a hand?': '需要帮助吗？',
+  'Contact INH Design & Build and we\'ll help you out.': '联系 INH Design & Build，我们将为您提供帮助。',
+  'Email support': '电邮支持',
+};
+
+const TABLES = { ms: MS, zh: ZH };
+
 export function t(text) {
-  if (current === 'ms') return MS[text] || text;
-  return text;
+  const table = TABLES[current];
+  return (table && table[text]) || text;
 }
