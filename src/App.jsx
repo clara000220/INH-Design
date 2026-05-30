@@ -88,6 +88,7 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   const [loading, setLoading] = useState(IS_LIVE);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   useEffect(() => {
     if (!IS_LIVE) return;
@@ -133,8 +134,19 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   };
 
   const canEdit = !!onChanged; // App only passes onChanged for editor roles
+  // The remark is the only field that isn't auto-saved, so guard against losing it.
+  const dirty = canEdit && note !== (task.note || '');
+  const requestClose = () => { if (dirty) setConfirmClose(true); else onClose(); };
+  const saveAndClose = async () => {
+    if (!IS_LIVE) { onClose(); return; }
+    setBusy(true); setErr(null);
+    try { await api.setPhaseTaskNote(task.id, note); onChanged && onChanged(); onClose(); }
+    catch (e) { setErr(e?.message || 'Could not save remark'); setConfirmClose(false); }
+    finally { setBusy(false); }
+  };
   return (
-    <Sheet title="Sub-task" onClose={onClose}>
+    <>
+    <Sheet title="Sub-task" onClose={requestClose}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16 }}>
         <button onClick={canEdit ? toggle : undefined} aria-label="Toggle complete"
           style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: canEdit ? 'pointer' : 'default' }}>
@@ -156,8 +168,13 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
       <textarea value={note} onChange={e => setNote(e.target.value)} disabled={!canEdit}
         placeholder={canEdit ? 'Add a note about this sub-task…' : 'No remark'} rows={3}
         style={{ width: '100%', resize: 'vertical', borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', padding: '11px 13px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
-      {canEdit && note !== (task.note || '') && (
-        <div style={{ marginTop: 8 }}><Btn variant="ghost" size="sm" icon="check" onClick={saveNote} disabled={busy}>{busy ? 'Saving…' : 'Save remark'}</Btn></div>
+      {canEdit && (
+        <div style={{ marginTop: 8 }}>
+          <Btn variant={dirty ? 'primary' : 'ghost'} size="sm" icon="check" onClick={saveNote} disabled={busy || !dirty}>
+            {busy ? 'Saving…' : dirty ? 'Save remark' : 'Saved'}
+          </Btn>
+          {dirty && <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--warning)', fontWeight: 600 }}>Unsaved</span>}
+        </div>
       )}
 
       <label className="inh-label" style={{ marginTop: 16 }}>Photos</label>
@@ -193,6 +210,20 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
         </button>
       )}
     </Sheet>
+    {confirmClose && (
+      <Dialog onClose={() => setConfirmClose(false)}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--warning-tint, var(--surface-2))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="alert-triangle" size={24} color="var(--warning)" />
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Unsaved changes</div>
+        <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>You edited the remark but haven't saved it. Save before closing?</p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Btn variant="ghost" onClick={() => { setConfirmClose(false); onClose(); }} disabled={busy}>Discard</Btn>
+          <Btn variant="primary" onClick={saveAndClose} disabled={busy}>{busy ? 'Saving…' : 'Save & close'}</Btn>
+        </div>
+      </Dialog>
+    )}
+    </>
   );
 }
 
