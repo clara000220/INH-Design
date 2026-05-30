@@ -151,6 +151,16 @@ export async function listTaskPhotos(taskId) {
   return (signed || []).map(s => s.signedUrl).filter(Boolean);
 }
 
+// Edit a project's details (name, code, address, type, est. handover).
+export async function updateProject(id, patch = {}) {
+  const clean = {};
+  ['name', 'code', 'address', 'type', 'est_handover'].forEach(k => {
+    if (patch[k] !== undefined) clean[k] = patch[k] === '' ? null : patch[k];
+  });
+  const { error } = await supabase.from('projects').update(clean).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deletePhase(id) {
   const { error } = await supabase.from('phases').delete().eq('id', id);
   if (error) throw error;

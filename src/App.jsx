@@ -311,6 +311,39 @@ function EditNameSheet({ initial, onClose, onSave }) {
   );
 }
 
+function EditProjectSheet({ project, onClose, onSave }) {
+  const [f, setF] = useState({
+    name: project?.name || '', code: project?.code || '', address: project?.address || '',
+    type: project?.type || '', est_handover: project?.est_handover ? String(project.est_handover).slice(0, 10) : '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
+  const ready = f.name.trim() && f.code.trim();
+  const save = async () => {
+    if (!ready) return;
+    setBusy(true); setErr(null);
+    try {
+      await onSave({ name: f.name.trim(), code: f.code.trim(), address: f.address.trim(), type: f.type.trim(), est_handover: f.est_handover });
+      onClose();
+    } catch (e) { setErr(e?.message || 'Could not save project'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Sheet title="Edit project" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Field label="Project name" icon="building" value={f.name} onChange={set('name')} placeholder="e.g. Lot 23, Bukit Indah" autoFocus />
+        <Field label="Project code" icon="briefcase" value={f.code} onChange={set('code')} placeholder="e.g. P-2026-045" />
+        <Field label="Address" icon="map-pin" value={f.address} onChange={set('address')} placeholder="Site address" />
+        <Field label="Type" icon="home" value={f.type} onChange={set('type')} placeholder="e.g. Full home renovation" />
+        <Field label="Est. handover (timeline)" icon="calendar" type="date" value={f.est_handover} onChange={set('est_handover')} placeholder="" />
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : 'Save changes'}</Btn></div>
+    </Sheet>
+  );
+}
+
 function SettingsSheet({ lang, onChangeLang, onClose }) {
   return (
     <Sheet title={t('Settings & language')} onClose={onClose}>
@@ -723,6 +756,17 @@ export default function App() {
     await reloadTop();
   };
 
+  const handleEditProject = async (form) => {
+    const id = activeProject?.id;
+    if (!id) return;
+    // Reflect immediately in the open project + list (the stack holds a snapshot).
+    setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, ...form } } : e)));
+    setProjects(ps => ps.map(p => (p.id === id ? { ...p, ...form } : p)));
+    if (!IS_LIVE) return;
+    await api.updateProject(id, form);
+    await reloadTop();
+  };
+
   const handleUpdateProgress = async (id, progress) => {
     if (!IS_LIVE) {
       setProjects(ps => ps.map(p => p.id === id ? { ...p, progress, status: progress >= 100 ? 'ontrack' : p.status } : p));
@@ -884,6 +928,7 @@ export default function App() {
       if (top.type === 'overview')
         return <OverviewScreen role={role} project={top.project} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
+          onEditProject={CAN_EDIT(role) ? () => setSheet('editProject') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
@@ -914,6 +959,7 @@ export default function App() {
         if (!currentProject) return <EmptyState text="No project assigned to your account yet." />;
         return <OverviewScreen role={role} project={currentProject} phases={live(detail?.phases)} schedule={live(detail?.schedule)}
           onEditProgress={CAN_EDIT(role) ? () => setSheet('progress') : null}
+          onEditProject={CAN_EDIT(role) ? () => setSheet('editProject') : null}
           onAddSchedule={CAN_EDIT(role) ? () => setSheet('addSchedule') : null}
           onAddPhase={CAN_EDIT(role) ? () => setSheet('addPhase') : null}
           onMarkPhaseComplete={CAN_EDIT(role) ? handleMarkPhaseComplete : null}
@@ -965,6 +1011,7 @@ export default function App() {
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
+      {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}
       {sheet === 'addPhase' && <AddPhaseSheet onClose={() => setSheet(null)} onSave={handleAddPhase} />}

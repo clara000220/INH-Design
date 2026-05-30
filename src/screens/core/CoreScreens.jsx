@@ -28,7 +28,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -42,14 +42,22 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
 
         {/* Hero progress */}
         <div className="inh-hero">
-          <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>Overall Progress</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{project?.name || 'Overall Progress'}</div>
+            {CAN_EDIT(role) && onEditProject && (
+              <button onClick={onEditProject} aria-label="Edit project"
+                style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
+                <Icon name="pencil" size={12} color="var(--on-dark-2)" /> Edit
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', margin: '6px 0 12px' }}>
             <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 52 }}>{project.progress}%</div>
             <Pill status={project.status} />
           </div>
           <ProgressBar pct={project.progress} dark />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, color: 'var(--on-dark-2)', fontSize: 12.5 }}>
-            <span>Carpentry &amp; built-ins</span>
+            <span>{project?.type || 'Renovation project'}</span>
             <span>Est. handover · {handover}</span>
           </div>
           {CAN_EDIT(role) && onEditProgress && (
@@ -63,20 +71,26 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           )}
         </div>
 
-        {/* What's happening now */}
-        <div>
-          <div className="inh-section">What's happening now</div>
-          <div className="inh-card" style={{ padding: 16, display: 'flex', gap: 13, alignItems: 'center' }}>
-            <div style={{ width: 46, height: 46, borderRadius: 12, background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Icon name="hard-hat" size={24} color="var(--inh-charcoal)" />
+        {/* What's happening now — derived from the schedule */}
+        {(() => {
+          const nowItem = (schedule || []).find(s => s.state === 'today') || (schedule || []).find(s => s.state !== 'completed');
+          if (!nowItem) return null;
+          return (
+            <div>
+              <div className="inh-section">What's happening now</div>
+              <div className="inh-card" style={{ padding: 16, display: 'flex', gap: 13, alignItems: 'center' }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name="hard-hat" size={24} color="var(--inh-charcoal)" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{nowItem.title}</div>
+                  <div className="body-2" style={{ marginTop: 2 }}>{nowItem.state === 'today' ? 'Scheduled for today' : 'Coming up next'}</div>
+                </div>
+                <Pill status={nowItem.state} />
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>Kitchen cabinet carcass install</div>
-              <div className="body-2" style={{ marginTop: 2 }}>Mutiara Carpentry is on site today</div>
-            </div>
-            <Pill status="progress" />
-          </div>
-        </div>
+          );
+        })()}
 
         {/* This week */}
         <div>
