@@ -44,7 +44,7 @@ export function Field({ label, icon, type = 'text', value, onChange, placeholder
 }
 
 /* ---------- Login ---------- */
-export function Login({ onSignIn, onForgot, live }) {
+export function Login({ onSignIn, onForgot, onRegister, live }) {
   const [email, setEmail] = useState(live ? '' : 'boss@inh.com.my');
   const [pw, setPw] = useState(live ? '' : 'renovate2026');
   const [remember, setRemember] = useState(true);
