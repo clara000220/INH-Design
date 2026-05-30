@@ -1,7 +1,7 @@
 /* INH — App shell, routing, role switching, live data */
 import { useState, useEffect } from 'react';
 import { Icon } from './components/Icon.jsx';
-import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet } from './components/primitives.jsx';
+import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet, Dialog } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE, normalizeLogin } from './lib/supabase.js';
 import * as api from './lib/api.js';
@@ -80,7 +80,7 @@ function PhotoSheet({ photo, onClose, onAdd }) {
 }
 
 // Detail view for a sub-task: complete toggle, remark, and its photos.
-function TaskDetailSheet({ task, projectId, onClose, onChanged }) {
+function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   const [done, setDone] = useState(task.done);
   const [note, setNote] = useState(task.note || '');
   const [photos, setPhotos] = useState([]);
@@ -173,6 +173,13 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged }) {
       )}
 
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+
+      {canEdit && onDelete && (
+        <button onClick={() => onDelete(task)}
+          style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+          <Icon name="trash" size={15} color="var(--error)" /> Delete item
+        </button>
+      )}
     </Sheet>
   );
 }
@@ -558,6 +565,7 @@ export default function App() {
   const [sheet, setSheet] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [task, setTask] = useState(null);
+  const [confirm, setConfirm] = useState(null);   // { title, body, onYes }
   const [lang, setLangState] = useState(getLang());
   const changeLang = (code) => { setLang(code); setLangState(code); };
 
@@ -761,6 +769,24 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  const handleDeleteSchedule = (item) => setConfirm({
+    title: 'Delete this item?',
+    body: `"${item.title}" will be removed from the schedule.`,
+    onYes: async () => { await api.deleteScheduleItem(item.id); await loadDetail(activeProjectId); },
+  });
+
+  const handleDeletePhase = (phase) => setConfirm({
+    title: 'Delete this phase?',
+    body: `"${phase.name}" and all its items will be permanently removed.`,
+    onYes: async () => { await api.deletePhase(phase.id); await loadDetail(activeProjectId); },
+  });
+
+  const handleDeleteTask = (task) => setConfirm({
+    title: 'Delete this item?',
+    body: `"${task.title}" and its photos/remark will be removed.`,
+    onYes: async () => { await api.deletePhaseTask(task.id); setTask(null); await loadDetail(activeProjectId); },
+  });
+
   const handleToggleSchedule = async (item) => {
     if (!IS_LIVE) return;
     const next = item.state === 'completed' ? 'upcoming' : 'completed';
@@ -868,6 +894,8 @@ export default function App() {
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
           onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
+          onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
+          onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined} onSetStatus={handleSetPayment} />;
@@ -896,6 +924,8 @@ export default function App() {
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
           onMoveTask={CAN_EDIT(role) ? handleMoveTask : null}
+          onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
+          onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
@@ -942,7 +972,21 @@ export default function App() {
       {photo && <PhotoSheet photo={photo} onClose={() => setPhoto(null)}
         onAdd={photo.taskId ? ((room, files) => handleTaskPhotoUpload(photo.taskId, room, files)) : handleAddUpdate} />}
       {task && <TaskDetailSheet task={task} projectId={activeProjectId} onClose={() => setTask(null)}
-        onChanged={CAN_EDIT(role) ? (() => loadDetail(activeProjectId)) : null} />}
+        onChanged={CAN_EDIT(role) ? (() => loadDetail(activeProjectId)) : null}
+        onDelete={CAN_EDIT(role) ? handleDeleteTask : null} />}
+      {confirm && (
+        <Dialog onClose={() => setConfirm(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="trash" size={24} color="var(--error)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>{confirm.title}</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>{confirm.body}</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setConfirm(null)}>Cancel</Btn>
+            <Btn variant="danger" onClick={async () => { const fn = confirm.onYes; setConfirm(null); try { await fn(); } catch (e) { /* surfaced via reload */ } }}>Delete</Btn>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 

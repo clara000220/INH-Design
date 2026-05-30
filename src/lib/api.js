@@ -151,6 +151,21 @@ export async function listTaskPhotos(taskId) {
   return (signed || []).map(s => s.signedUrl).filter(Boolean);
 }
 
+export async function deletePhase(id) {
+  const { error } = await supabase.from('phases').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deletePhaseTask(id) {
+  const { error } = await supabase.from('phase_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteScheduleItem(id) {
+  const { error } = await supabase.from('schedule_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // Update an existing phase (e.g. mark complete, change pct/status/name/dates).
 export async function updatePhase(id, patch = {}) {
   const clean = {};

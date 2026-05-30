@@ -28,9 +28,11 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
+  const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
+  const [dragItem, setDragItem] = useState(null);     // index of item being dragged (within open phase)
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
     : '20 Jun';
@@ -113,6 +115,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                   </button>
                 )}
                 <Pill status={t.state} />
+                {CAN_EDIT(role) && onDeleteSchedule && (
+                  <button onClick={() => onDeleteSchedule(t)} title="Delete item" aria-label="Delete item"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', marginLeft: 4 }}>
+                    <Icon name="trash" size={15} color="var(--fg-3)" />
+                  </button>
+                )}
               </div>
             );})}
           </div>
@@ -135,7 +143,10 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
               const isDone = p.status === 'completed' || (total > 0 && doneN === total);
               const editable = CAN_EDIT(role);
               return (
-              <div key={i} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
+              <div key={i}
+                onDragOver={e => { if (dragPhase != null) e.preventDefault(); }}
+                onDrop={() => { if (dragPhase != null && dragPhase !== i && onMovePhase) onMovePhase(dragPhase, i); setDragPhase(null); }}
+                style={{ borderTop: i ? '1px solid var(--border)' : 'none', background: dragPhase != null && dragPhase !== i ? 'var(--inh-lime-soft)' : 'transparent', transition: 'background .12s' }}>
                 <div className="inh-row" onClick={() => setOpen(open === i ? -1 : i)} style={{ paddingTop: 13, paddingBottom: 13 }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: isDone ? 'var(--success)' : (derivedPct > 0 || p.status === 'progress') ? 'var(--inh-lime)' : 'var(--surface-2)',
@@ -148,15 +159,21 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     <div className="inh-row__sub">{total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates}</div>
                   </div>
                   {editable && onMovePhase && (
-                    <div style={{ display: 'flex', flexDirection: 'column', marginRight: 4 }} onClick={e => e.stopPropagation()}>
-                      <button onClick={() => i > 0 && onMovePhase(i, i - 1)} disabled={i === 0} aria-label="Move phase up"
-                        style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 1, display: 'flex' }}>
-                        <Icon name="chevron-up" size={17} color="var(--fg-2)" stroke={2.4} />
-                      </button>
-                      <button onClick={() => i < phases.length - 1 && onMovePhase(i, i + 1)} disabled={i === phases.length - 1} aria-label="Move phase down"
-                        style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === phases.length - 1 ? 'default' : 'pointer', opacity: i === phases.length - 1 ? 0.25 : 1, display: 'flex' }}>
-                        <Icon name="chevron-down" size={17} color="var(--fg-2)" stroke={2.4} />
-                      </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 1, marginRight: 2 }} onClick={e => e.stopPropagation()}>
+                      <span draggable onDragStart={() => setDragPhase(i)} onDragEnd={() => setDragPhase(null)} title="Drag to reorder" aria-label="Drag to reorder"
+                        style={{ cursor: 'grab', display: 'flex', padding: 3 }}>
+                        <Icon name="grip" size={16} color="var(--fg-3)" />
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <button onClick={() => i > 0 && onMovePhase(i, i - 1)} disabled={i === 0} aria-label="Move phase up"
+                          style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 1, display: 'flex' }}>
+                          <Icon name="chevron-up" size={16} color="var(--fg-2)" stroke={2.4} />
+                        </button>
+                        <button onClick={() => i < phases.length - 1 && onMovePhase(i, i + 1)} disabled={i === phases.length - 1} aria-label="Move phase down"
+                          style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === phases.length - 1 ? 'default' : 'pointer', opacity: i === phases.length - 1 ? 0.25 : 1, display: 'flex' }}>
+                          <Icon name="chevron-down" size={16} color="var(--fg-2)" stroke={2.4} />
+                        </button>
+                      </div>
                     </div>
                   )}
                   <Icon name="chevron-down" size={18} color="var(--fg-3)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
@@ -171,7 +188,10 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     {/* Items — each can be ticked, photographed, or opened for remark/photos */}
                     <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10 }}>
                       {tasks.map((t, ti) => (
-                        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: ti ? '1px solid var(--border)' : 'none' }}>
+                        <div key={t.id}
+                          onDragOver={e => { if (dragItem != null) { e.preventDefault(); e.stopPropagation(); } }}
+                          onDrop={e => { e.stopPropagation(); if (dragItem != null && dragItem !== ti && onMoveTask) onMoveTask(p, dragItem, ti); setDragItem(null); }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 4px', borderTop: ti ? '1px solid var(--border)' : 'none', background: dragItem != null && dragItem !== ti ? 'var(--inh-lime-soft)' : 'transparent', borderRadius: 6, transition: 'background .12s' }}>
                           <button onClick={() => editable && onTogglePhaseTask && onTogglePhaseTask(t)} aria-label="Toggle item"
                             style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: editable && onTogglePhaseTask ? 'pointer' : 'default' }}>
                             <Icon name={t.done ? 'check-circle' : 'circle'} size={19} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />
@@ -194,7 +214,11 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                             </button>
                           )}
                           {editable && onMoveTask && (
-                            <div style={{ display: 'flex', flexShrink: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                              <span draggable onDragStart={() => setDragItem(ti)} onDragEnd={() => setDragItem(null)} title="Drag to reorder" aria-label="Drag to reorder"
+                                style={{ cursor: 'grab', display: 'flex', padding: 2 }}>
+                                <Icon name="grip" size={14} color="var(--fg-3)" />
+                              </span>
                               <button onClick={() => ti > 0 && onMoveTask(p, ti, ti - 1)} disabled={ti === 0} aria-label="Move item up"
                                 style={{ border: 'none', background: 'transparent', padding: 2, cursor: ti === 0 ? 'default' : 'pointer', opacity: ti === 0 ? 0.25 : 1, display: 'flex' }}>
                                 <Icon name="chevron-up" size={14} color="var(--fg-3)" stroke={2.4} />
@@ -241,6 +265,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
                         <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
                       </div>
+                    )}
+                    {editable && onDeletePhase && (
+                      <button onClick={() => onDeletePhase(p)}
+                        style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', padding: 0 }}>
+                        <Icon name="trash" size={14} color="var(--error)" /> Delete phase
+                      </button>
                     )}
                   </div>
                 )}
