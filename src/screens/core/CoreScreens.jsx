@@ -37,7 +37,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -70,12 +70,20 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
         <div className="inh-hero">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{project?.name || 'Overall Progress'}</div>
-            {CAN_EDIT(role) && onEditProject && (
-              <button onClick={onEditProject} aria-label="Edit project"
-                style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
-                <Icon name="pencil" size={12} color="var(--on-dark-2)" /> Edit
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {onManageAccess && (
+                <button onClick={onManageAccess} aria-label="Team & access"
+                  style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
+                  <Icon name="users" size={12} color="var(--on-dark-2)" /> Team
+                </button>
+              )}
+              {CAN_EDIT(role) && onEditProject && (
+                <button onClick={onEditProject} aria-label="Edit project"
+                  style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
+                  <Icon name="pencil" size={12} color="var(--on-dark-2)" /> Edit
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', margin: '6px 0 12px' }}>
             <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 52 }}>{overallPct}%</div>

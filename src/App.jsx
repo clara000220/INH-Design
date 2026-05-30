@@ -1096,6 +1096,7 @@ export default function App() {
           onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
+          onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1130,6 +1131,7 @@ export default function App() {
           onDeleteSchedule={CAN_EDIT(role) ? handleDeleteSchedule : null}
           onDeletePhase={CAN_EDIT(role) ? handleDeletePhase : null}
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
+          onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
