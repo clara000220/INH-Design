@@ -5,7 +5,7 @@ import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet } from './components/primi
 import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE } from './lib/supabase.js';
 import * as api from './lib/api.js';
-import { Login, ForgotFlow, Field } from './screens/auth/Auth.jsx';
+import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
@@ -585,6 +585,21 @@ export default function App() {
     // onAuthStateChange handles loading the role + data and entering the app.
   };
 
+  const signUp = async (email, password, fullName) => {
+    if (!IS_LIVE) { setRole('homeowner'); setTab('home'); setStack([]); setAuth('in'); return { needsConfirm: false }; }
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: {
+        data: { full_name: fullName },           // read by the handle_new_user trigger
+        emailRedirectTo: window.location.origin,  // confirmation link returns to this app
+      },
+    });
+    if (error) throw error;
+    // With "Confirm email" on, Supabase returns no session until the link is
+    // clicked. Signal the Register screen to show its "check your inbox" state.
+    return { needsConfirm: !data.session };
+  };
+
   const signOut = async () => {
     if (IS_LIVE) await supabase.auth.signOut();
     setRole(IS_LIVE ? null : 'owner');
@@ -773,7 +788,8 @@ export default function App() {
 
   // ---- render ----
   let device;
-  if (auth === 'login') device = <Login onSignIn={signIn} onForgot={() => setAuth('forgot')} live={IS_LIVE} />;
+  if (auth === 'login') device = <Login onSignIn={signIn} onForgot={() => setAuth('forgot')} onRegister={() => setAuth('register')} live={IS_LIVE} />;
+  else if (auth === 'register') device = <Register onSignUp={signUp} onBack={() => setAuth('login')} />;
   else if (auth === 'forgot') device = <ForgotFlow onBack={() => setAuth('login')} onDone={() => setAuth('login')} />;
   else device = (
     <div className="inh-app">

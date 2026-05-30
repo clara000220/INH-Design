@@ -98,7 +98,74 @@ export function Login({ onSignIn, onForgot, live }) {
 
       <div style={{ flex: 1 }} />
       <div style={{ textAlign: 'center', marginTop: 32 }}>
-        <p className="body-2" style={{ marginBottom: 8 }}>Need access? Contact INH Design &amp; Build</p>
+        <p className="body-2" style={{ marginBottom: 8 }}>
+          New to INH? <button className="inh-link" onClick={onRegister}>Create an account</button>
+        </p>
+      </div>
+    </AuthShell>
+  );
+}
+
+/* ---------- Sign up ---------- */
+export function Register({ onSignUp, onBack }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);   // email-confirmation sent
+
+  const submit = async () => {
+    if (!name.trim()) { setErr('Enter your name'); return; }
+    if (!email.trim()) { setErr('Enter your email'); return; }
+    if (pw.length < 8) { setErr('Password must be at least 8 characters'); return; }
+    setErr(null); setBusy(true);
+    try {
+      const res = await onSignUp(email.trim(), pw, name.trim());
+      // If email confirmation is on, no session is returned — show the
+      // "check your inbox" state. Otherwise the app enters straight away.
+      if (res?.needsConfirm) setDone(true);
+    } catch (e) {
+      setErr(e?.message || 'Could not create your account');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) return (
+    <AuthShell>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ width: 84, height: 84, borderRadius: '50%', background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22 }}>
+          <Icon name="mail" size={40} color="var(--inh-charcoal)" stroke={2} />
+        </div>
+        <h1 className="h1" style={{ marginBottom: 8 }}>Check your email</h1>
+        <p className="body-2" style={{ maxWidth: 280 }}>
+          We sent a confirmation link to <b style={{ color: 'var(--fg-1)' }}>{email}</b>. Click it to activate your account, then sign in.
+        </p>
+      </div>
+      <Btn variant="primary" onClick={onBack}>Back to sign in</Btn>
+    </AuthShell>
+  );
+
+  return (
+    <AuthShell>
+      <button className="inh-iconbtn" onClick={onBack} style={{ marginBottom: 24 }}><Icon name="arrow-left" size={20} /></button>
+      <h1 className="h1" style={{ fontSize: 26, marginBottom: 6 }}>Create your account</h1>
+      <p className="body-2" style={{ marginBottom: 24 }}>Sign up and we'll email you a confirmation link.</p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Your name" autoFocus />
+        <Field label="Email" icon="mail" type="email" value={email} onChange={setEmail} placeholder="you@email.com" />
+        <Field label="Password" icon="lock" password value={pw} onChange={setPw} placeholder="At least 8 characters"
+          error={err} />
+      </div>
+
+      <div style={{ height: 24 }} />
+      <Btn variant="primary" onClick={submit} disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</Btn>
+
+      <div style={{ flex: 1 }} />
+      <div style={{ textAlign: 'center', marginTop: 32 }}>
+        <p className="body-2">Already have an account? <button className="inh-link" onClick={onBack}>Sign in</button></p>
       </div>
     </AuthShell>
   );
