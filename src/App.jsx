@@ -13,6 +13,7 @@ import {
 } from './screens/owner/OwnerScreens.jsx';
 
 const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+const todayISO = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 /* ---------- sheets ---------- */
 const ROOM_PRESETS = ['Kitchen', 'Living room', 'Master bath', 'Bedroom', 'Exterior'];
@@ -84,6 +85,7 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   const [done, setDone] = useState(task.done);
   const [note, setNote] = useState(task.note || '');
   const [date, setDate] = useState(task.due_date || '');
+  const [end, setEnd] = useState(task.end_date || '');
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(IS_LIVE);
   const [busy, setBusy] = useState(false);
@@ -103,9 +105,16 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
   const toggle = async () => {
     const next = !done;
     setDone(next);
+    setEnd(next ? todayISO() : '');   // ticking auto-fills the end (completion) date
     if (!IS_LIVE) return;
     try { await api.setPhaseTaskDone(task.id, next); onChanged && onChanged(); }
     catch (e) { setErr(e?.message || 'Could not update'); setDone(!next); }
+  };
+  const saveEnd = async (val) => {
+    setEnd(val);
+    if (!IS_LIVE) return;
+    try { await api.setPhaseTaskEnd(task.id, val || null); onChanged && onChanged(); }
+    catch (e) { setErr(e?.message || 'Could not set end date'); }
   };
   const saveNote = async () => {
     if (!IS_LIVE) return;
@@ -159,10 +168,15 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
         <Pill status={done ? 'completed' : 'progress'} />
       </div>
 
-      <label className="inh-label">Date</label>
+      <label className="inh-label">Start date</label>
       <input type="date" value={date} onChange={e => saveDate(e.target.value)} disabled={!canEdit}
         style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
-      <p className="meta" style={{ margin: '6px 0 14px' }}>Items with a date show on "This week".</p>
+      <p className="meta" style={{ margin: '6px 0 12px' }}>Items with a start date show on "This week".</p>
+
+      <label className="inh-label">End date</label>
+      <input type="date" value={end} onChange={e => saveEnd(e.target.value)} disabled={!canEdit}
+        style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', padding: '10px 13px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+      <p className="meta" style={{ margin: '6px 0 14px' }}>Auto-fills the day you tick the item complete.</p>
 
       <label className="inh-label">Remark</label>
       <textarea value={note} onChange={e => setNote(e.target.value)} disabled={!canEdit}
@@ -183,7 +197,7 @@ function TaskDetailSheet({ task, projectId, onClose, onChanged, onDelete }) {
       ) : photos.length ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
           {photos.map((url, i) => (
-            <div key={i} style={{ aspectRatio: '1', borderRadius: 10, backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', background: 'var(--surface-2)' }} />
+            <div key={i} style={{ aspectRatio: '1', borderRadius: 10, backgroundColor: 'var(--surface-2)', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
           ))}
         </div>
       ) : (
@@ -426,12 +440,12 @@ function SupportSheet({ onClose }) {
   );
 }
 
-function AddProjectSheet({ onClose, onSave }) {
-  const [f, setF] = useState({ name: '', code: '', address: '', type: '', est_handover: '' });
+function AddProjectSheet({ onClose, onSave, suggestedCode }) {
+  const [f, setF] = useState({ name: '', code: suggestedCode || '', address: '', type: '', est_handover: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
-  const ready = f.name.trim() && f.code.trim();
+  const ready = f.name.trim() && f.code.trim();   // code is auto-filled, so always present
   const save = async () => {
     if (!ready) return;
     setBusy(true); setErr(null);
@@ -671,6 +685,14 @@ export default function App() {
   const me = profile
     ? { name: profile.full_name || profile.name, initials: profile.initials || initialsOf(profile.full_name || profile.name) }
     : null;
+
+  // Auto project code: P-<year>-<next 3-digit sequence> from existing codes.
+  const nextProjectCode = (() => {
+    const year = new Date().getFullYear();
+    const nums = (projects || []).map(p => { const m = /(\d+)\s*$/.exec(p.code || ''); return m ? parseInt(m[1], 10) : 0; });
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    return `P-${year}-${String(next).padStart(3, '0')}`;
+  })();
 
   // "This week" combines schedule_items with any dated phase-items, so a date
   // set on an item surfaces on the weekly schedule. Demo mode → undefined.
@@ -1108,7 +1130,7 @@ export default function App() {
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
-      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} />}
+      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} suggestedCode={nextProjectCode} />}
       {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}

@@ -14,6 +14,7 @@ const fmtDayMon = (s) => { const x = d(s); return x ? `${x.getDate()} ${MONTHS[x
 const fmtRange = (a, b) => { const x = fmtDayMon(a), y = fmtDayMon(b); return x && y ? `${x} – ${y}` : (x || y || ''); };
 const fmtSize = (n) => (n ? (n / 1048576).toFixed(1) + ' MB' : '');
 const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+const todayISO = () => { const d = new Date(); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 
 /* ------------------------------ profile ------------------------------- */
 export async function getMyProfile() {
@@ -63,7 +64,7 @@ export async function updateProjectProgress(id, progress) {
 /* --------------------------- project detail --------------------------- */
 export async function listPhases(projectId) {
   const { data, error } = await supabase.from('phases')
-    .select('*, phase_tasks(id, title, note, done, sort_order, due_date)')
+    .select('*, phase_tasks(id, title, note, done, sort_order, due_date, end_date)')
     .eq('project_id', projectId).order('sort_order', { ascending: true });
   if (error) throw error;
   return (data || []).map(p => ({
@@ -71,7 +72,7 @@ export async function listPhases(projectId) {
     dates: fmtRange(p.start_date, p.end_date),
     tasks: (p.phase_tasks || [])
       .slice().sort((a, b) => a.sort_order - b.sort_order)
-      .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done, due_date: t.due_date })),
+      .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done, due_date: t.due_date, end_date: t.end_date })),
   }));
 }
 
@@ -104,9 +105,17 @@ export async function addPhaseTask(phaseId, projectId, title) {
   if (error) throw error;
 }
 
-// Tick / untick a phase sub-task.
+// Tick / untick a phase sub-task. Ticking auto-stamps today's end (completion)
+// date; un-ticking clears it.
 export async function setPhaseTaskDone(id, done) {
-  const { error } = await supabase.from('phase_tasks').update({ done }).eq('id', id);
+  const { error } = await supabase.from('phase_tasks')
+    .update({ done, end_date: done ? todayISO() : null }).eq('id', id);
+  if (error) throw error;
+}
+
+// Set/clear an item's end (completion) date.
+export async function setPhaseTaskEnd(id, date) {
+  const { error } = await supabase.from('phase_tasks').update({ end_date: date || null }).eq('id', id);
   if (error) throw error;
 }
 
