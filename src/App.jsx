@@ -725,11 +725,13 @@ export default function App() {
     const r = await Promise.allSettled([
       api.listProjects(), api.getMyProfile(), api.listUsers(),
       api.listHomeowners(), api.listProjectFees(), api.listAudit(), api.listCredentials(),
+      api.getStorageUsage(),
     ]);
-    const [p, pr, us, ho, fe, au, cr] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    const [p, pr, us, ho, fe, au, cr, sb] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
     if (p) setProjects(p);
     if (pr) setProfile(pr);
     if (us) setUsers(cr ? us.map(u => ({ ...u, ...(cr[u.id] || {}) })) : us);
+    if (sb != null) setStorageBytes(sb);
     if (ho) setHomeowners(ho);
     if (fe) setFees(fe);
     if (au) setAudit(au);
@@ -1265,7 +1267,7 @@ export default function App() {
   else if (auth === 'forgot') device = <ForgotFlow onBack={() => setAuth('login')} onDone={() => setAuth('login')} />;
   else device = (
     <div className="inh-app">
-      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} profile={me} />
+      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} profile={me} storageBytes={storageBytes} />
       <div className="inh-main">
         {header()}
         {body()}

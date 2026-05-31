@@ -2,6 +2,7 @@
    shape the UI expects, so screens stay presentational. RLS on the server
    decides what each role can actually read/write; these calls just ask. */
 import { supabase } from './supabase.js';
+import { compressImage } from './image.js';
 
 /* ----------------------------- formatting ----------------------------- */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -139,7 +140,7 @@ export async function uploadTaskPhotos(projectId, taskId, room, files = []) {
   if (error) throw error;
   const list = Array.from(files);
   for (let i = 0; i < list.length; i++) {
-    const f = list[i];
+    const f = await compressImage(list[i]);
     const safe = f.name.replace(/[^\w.\-]+/g, '_');
     const path = `${projectId}/${upd.id}/${i}-${safe}`;
     const { error: ue } = await supabase.storage.from('update-photos').upload(path, f, { upsert: false });
@@ -310,7 +311,7 @@ export async function uploadUpdate(projectId, room, files = []) {
   if (error) throw error;
   const list = Array.from(files);
   for (let i = 0; i < list.length; i++) {
-    const f = list[i];
+    const f = await compressImage(list[i]);
     const safe = f.name.replace(/[^\w.\-]+/g, '_');
     const path = `${projectId}/${upd.id}/${i}-${safe}`;
     const { error: ue } = await supabase.storage.from('update-photos').upload(path, f, { upsert: false });

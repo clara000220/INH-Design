@@ -123,11 +123,17 @@ export const TAB_DEFS = {
 };
 
 /* Desktop sidebar — replaces the bottom tab bar at >=960px */
-export function Sidebar({ role, active, onChange, onSignOut, profile }) {
+export function Sidebar({ role, active, onChange, onSignOut, profile, storageBytes = 0 }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta?.person;
   const initials = profile?.initials || meta?.initials;
+  const GB = 1024 * 1024 * 1024;
+  const storeLabel = storageBytes >= GB ? (storageBytes / GB).toFixed(1) + ' GB'
+    : storageBytes >= 1024 * 1024 ? (storageBytes / (1024 * 1024)).toFixed(0) + ' MB'
+    : (storageBytes / 1024).toFixed(0) + ' KB';
+  const storePct = Math.min(100, Math.round((storageBytes / (10 * GB)) * 100));
+  const showStore = role === 'owner' || role === 'admin';
   return (
     <aside className="inh-sidebar">
       <div className="inh-sidebar__brand">
@@ -142,6 +148,16 @@ export function Sidebar({ role, active, onChange, onSignOut, profile }) {
           </button>
         ))}
       </nav>
+      {showStore && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fg-3)', fontWeight: 700, letterSpacing: '.04em', marginBottom: 5 }}>
+            <span>STORAGE</span><span>{storeLabel} / 10 GB</span>
+          </div>
+          <div style={{ height: 5, background: 'var(--surface-2)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: storePct + '%', background: storePct > 90 ? 'var(--warning)' : 'var(--inh-lime)' }} />
+          </div>
+        </div>
+      )}
       {(name || initials) && (
         <div className="inh-sidebar__foot">
           <div className="inh-avatar">{initials}</div>
