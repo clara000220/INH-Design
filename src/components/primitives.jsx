@@ -71,11 +71,22 @@ export function AppHeader({ eyebrow, title, property, onProperty, role, profile,
         {eyebrow && <div className="inh-eyebrow">{eyebrow}</div>}
         <div className="inh-title">{title}</div>
         {property && (
-          <div className="inh-prop" onClick={onProperty}>
-            <Icon name="map-pin" size={14} color="var(--fg-3)" />
-            {property}
-            <Icon name="chevron-down" size={15} color="var(--fg-3)" />
-          </div>
+          onProperty ? (
+            <button onClick={onProperty} aria-label="Switch project"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 6,
+                border: '1.5px solid var(--inh-charcoal)', background: 'var(--inh-lime-soft)',
+                borderRadius: 999, padding: '6px 13px', cursor: 'pointer',
+                fontSize: 13, fontWeight: 700, color: 'var(--inh-charcoal)' }}>
+              <Icon name="building" size={15} color="var(--inh-charcoal)" />
+              {property}
+              <Icon name="chevron-down" size={16} color="var(--inh-charcoal)" stroke={2.4} />
+            </button>
+          ) : (
+            <div className="inh-prop">
+              <Icon name="map-pin" size={14} color="var(--fg-3)" />
+              {property}
+            </div>
+          )
         )}
       </div>
       {onBell && (
