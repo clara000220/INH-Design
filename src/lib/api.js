@@ -166,6 +166,37 @@ export async function listTaskPhotos(taskId) {
   return (signed || []).map(s => s.signedUrl).filter(Boolean);
 }
 
+/* ------------------------------ plan / storage ------------------------------ */
+// Total storage used (bytes) across photo + document buckets, for the plan meter.
+export async function getStorageUsage() {
+  const { data, error } = await supabase.rpc('storage_usage_bytes');
+  if (error) throw error;
+  return Number(data) || 0;
+}
+
+// Recursively remove everything under a bucket prefix (Supabase folders have id===null).
+async function removeStorageFolder(bucket, prefix) {
+  const { data: entries } = await supabase.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (!entries || !entries.length) return;
+  const files = [];
+  for (const e of entries) {
+    const path = `${prefix}/${e.name}`;
+    if (e.id === null) await removeStorageFolder(bucket, path);   // sub-folder
+    else files.push(path);
+  }
+  if (files.length) await supabase.storage.from(bucket).remove(files);
+}
+
+// Owner-only: delete a project. Clears its storage files first (to free space),
+// then deletes the row (DB rows cascade).
+export async function deleteProject(id) {
+  for (const bucket of ['update-photos', 'documents']) {
+    try { await removeStorageFolder(bucket, id); } catch (e) { /* best effort */ }
+  }
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // Edit a project's details (name, code, address, type, est. handover).
 export async function updateProject(id, patch = {}) {
   const clean = {};

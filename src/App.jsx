@@ -9,7 +9,7 @@ import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
-  ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen,
+  ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen, PlanScreen,
 } from './screens/owner/OwnerScreens.jsx';
 
 const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
@@ -663,6 +663,7 @@ export default function App() {
   const [lang, setLangState] = useState(getLang());
   const changeLang = (code) => { setLang(code); setLangState(code); };
   const [feedProjectId, setFeedProjectId] = useState(null);   // which project the owner views on Updates/Documents
+  const [storageBytes, setStorageBytes] = useState(0);
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -809,6 +810,11 @@ export default function App() {
     }
   }, [detail, role]);
 
+  // Load storage usage when the Plan screen opens (and after project deletes).
+  useEffect(() => {
+    if (IS_LIVE && top?.type === 'plan') api.getStorageUsage().then(setStorageBytes).catch(() => {});
+  }, [top, projects]);
+
   // ---- auth handlers ----
   const signIn = async (email, password) => {
     if (!IS_LIVE) { setRole(role || 'owner'); setTab('home'); setStack([]); setAuth('in'); return; }
@@ -850,14 +856,24 @@ export default function App() {
     await reloadTop();
   };
 
+  const internalCount = () => users.filter(u => u.role === 'owner' || u.role === 'admin').length;
+
   const handleChangeRole = async (userId, role) => {
     if (!IS_LIVE) return;
+    if (role === 'owner' || role === 'admin') {
+      const u = users.find(x => x.id === userId);
+      const alreadyInternal = u && (u.role === 'owner' || u.role === 'admin');
+      if (!alreadyInternal && internalCount() >= 20) throw new Error('Internal user limit reached (max 20 owner/admin).');
+    }
     await api.setUserRole(userId, role);
     await reloadTop();
   };
 
   const handleAddAccount = async ({ email, login, password, fullName, role }) => {
     if (!IS_LIVE) return;
+    if ((role === 'owner' || role === 'admin') && internalCount() >= 20) {
+      throw new Error('Internal user limit reached (max 20 owner/admin).');
+    }
     const res = await api.adminCreateUser({ email, password, fullName, role });
     // Store the login + temp password (owner-visible) so it can be looked up
     // later. Don't fail the whole flow if this can't be saved.
@@ -951,6 +967,17 @@ export default function App() {
     await api.updateProject(id, form);
     await reloadTop();
   };
+
+  const handleDeleteProject = (project) => setConfirm({
+    title: 'Delete this project?',
+    body: `"${project.name}" and all its phases, items, updates, documents and photos will be permanently removed, freeing their storage.`,
+    onYes: async () => {
+      await api.deleteProject(project.id);
+      setStack([]); setTab('home'); setFeedProjectId(null);
+      await reloadTop();
+      try { setStorageBytes(await api.getStorageUsage()); } catch (e) { /* ignore */ }
+    },
+  });
 
   const handleUpdateProgress = async (id, progress) => {
     if (!IS_LIVE) {
@@ -1126,6 +1153,7 @@ export default function App() {
         overview:   { eyebrow: top.project?.code, title: 'Overview', back: pop },
         feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project?.name, back: pop },
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
+        plan:       { eyebrow: 'Owner tools', title: 'Plan & storage', back: pop },
         team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
         documents:  { eyebrow: top.project?.name, title: 'Documents', back: pop },
       }[top.type];
@@ -1170,6 +1198,8 @@ export default function App() {
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
           onSetStatus={handleSetPayment} onAdd={handleAddPayment} onEdit={handleEditPayment} onDelete={handleDeletePayment} />;
+      if (top.type === 'plan')
+        return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
@@ -1210,7 +1240,8 @@ export default function App() {
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}
-        onAddProject={role === 'owner' ? () => setSheet('addProject') : null} />;
+        onAddProject={role === 'owner' ? () => setSheet('addProject') : null}
+        onDeleteProject={role === 'owner' ? handleDeleteProject : null} />;
     }
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
     if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
@@ -1219,6 +1250,7 @@ export default function App() {
     if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
       onAddAccount={IS_LIVE ? () => setSheet('invite') : null}
+      onPlan={role === 'owner' ? () => push({ type: 'plan' }) : null}
       onSignOut={signOut} onEditName={() => setSheet('editName')}
       onSettings={() => setSheet('settings')} onSupport={() => setSheet('support')}
       onAllProjects={() => { setTab('home'); setStack([]); }}

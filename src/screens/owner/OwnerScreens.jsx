@@ -8,7 +8,7 @@ import { CAN_EDIT, projectStatus } from '../core/CoreScreens.jsx';
 import { t } from '../../lib/i18n.js';
 
 /* =================== PROJECTS LIST (admin & owner home) =================== */
-export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProject, onAddProject }) {
+export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProject, onAddProject, onDeleteProject }) {
   const list = projects;
   return (
     <div className="inh-scroll">
@@ -30,7 +30,15 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17 }}>{p.name}</div>
                 <div className="inh-row__sub">{p.code} · {p.type}</div>
               </div>
-              <Pill status={projectStatus(p)} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Pill status={projectStatus(p)} />
+                {onDeleteProject && (
+                  <button onClick={(e) => { e.stopPropagation(); onDeleteProject(p); }} aria-label="Delete project"
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                    <Icon name="trash" size={15} color="var(--fg-3)" />
+                  </button>
+                )}
+              </div>
             </div>
             <div style={{ margin: '16px 0 8px' }}><ProgressBar pct={p.progress} green={p.progress === 100} /></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -550,8 +558,80 @@ export function TeamScreen({ project, members = DEMO_MEMBERS, homeowners = [], p
   );
 }
 
+/* =================== PLAN & STORAGE (owner) =================== */
+const GB = 1024 * 1024 * 1024;
+function fmtBytes(b) {
+  if (b >= GB) return (b / GB).toFixed(2) + ' GB';
+  if (b >= 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  if (b >= 1024) return (b / 1024).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+export function PlanScreen({ users = [], projects = [], storageBytes = 0 }) {
+  const INTERNAL_LIMIT = 20;
+  const STORAGE_LIMIT = 10 * GB;
+  const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
+  const homeowners = users.filter(u => u.role === 'homeowner').length;
+  const pct = Math.min(100, Math.round((storageBytes / STORAGE_LIMIT) * 100));
+  const features = ['Progress photo upload', 'Document management', 'Client portal access'];
+
+  const UsageRow = ({ icon, label, value, sub, warn }) => (
+    <div className="inh-row" style={{ cursor: 'default' }}>
+      <div className="inh-row__ico" style={{ background: 'var(--surface-2)' }}><Icon name={icon} size={18} color="var(--fg-2)" /></div>
+      <div className="inh-row__main">
+        <div className="inh-row__title" style={{ fontSize: 14.5 }}>{label}</div>
+        {sub && <div className="inh-row__sub">{sub}</div>}
+      </div>
+      <div className="inh-figure" style={{ fontSize: 15, color: warn ? 'var(--error)' : 'var(--fg-1)' }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div className="inh-scroll">
+      <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="inh-hero" style={{ padding: 20 }}>
+          <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>Your plan</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--on-dark)', margin: '2px 0 16px' }}>INH Standard</div>
+          <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>File storage</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, marginTop: 2 }}>
+            <div className="inh-figure" style={{ color: 'var(--inh-lime)', fontSize: 26 }}>{fmtBytes(storageBytes)}</div>
+            <div style={{ color: 'var(--on-dark-2)', fontSize: 14, paddingBottom: 3 }}>/ 10 GB</div>
+          </div>
+          <div style={{ height: 9, background: 'rgba(255,255,255,.16)', borderRadius: 6, marginTop: 10, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: pct + '%', background: pct > 90 ? 'var(--warning)' : 'var(--inh-lime)' }} />
+          </div>
+          <div className="meta" style={{ color: 'var(--on-dark-2)', marginTop: 8 }}>{pct}% used</div>
+        </div>
+
+        <div>
+          <div className="inh-section">Usage</div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            <UsageRow icon="shield-check" label="Internal users" sub="Owner / Admin / Staff" value={`${internal} / ${INTERNAL_LIMIT}`} warn={internal >= INTERNAL_LIMIT} />
+            <UsageRow icon="users" label="Homeowner accounts" sub="Unlimited" value={`${homeowners}`} />
+            <UsageRow icon="building" label="Active projects" sub="Unlimited" value={`${projects.length}`} />
+          </div>
+        </div>
+
+        <div>
+          <div className="inh-section">Included</div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            {features.map(f => (
+              <div key={f} className="inh-row" style={{ cursor: 'default' }}>
+                <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}><Icon name="check" size={18} color="var(--inh-charcoal)" stroke={2.6} /></div>
+                <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>{f}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="meta" style={{ textAlign: 'center' }}>Low on space? Delete an old project from the Projects list to free its photos and documents.</p>
+      </div>
+    </div>
+  );
+}
+
 /* =================== MORE =================== */
-export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPlan, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta.person;
   const initials = profile?.initials || meta.initials;
@@ -583,6 +663,7 @@ export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onSig
             <Group>
               <Item icon="users" label={t('Users')} tint="var(--inh-lime-tint)" onClick={onUsers} />
               <Item icon="shield-check" label={t('Team & Access')} tint="var(--inh-lime-tint)" onClick={onTeam} />
+              {onPlan && <Item icon="wallet" label={t('Plan & storage')} tint="var(--inh-lime-tint)" onClick={onPlan} />}
             </Group>
           </div>
         )}

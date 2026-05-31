@@ -39,6 +39,7 @@ const MS = {
   // More — items
   'Users': 'Pengguna',
   'Team & Access': 'Pasukan & Akses',
+  'Plan & storage': 'Pelan & Storan',
   'All projects': 'Semua Projek',
   'My properties': 'Hartanah Saya',
   'Project contacts': 'Kenalan Projek',
@@ -80,6 +81,7 @@ const ZH = {
   // More — items
   'Users': '用户',
   'Team & Access': '团队与权限',
+  'Plan & storage': '套餐与存储',
   'All projects': '所有项目',
   'My properties': '我的房产',
   'Project contacts': '项目联系人',
