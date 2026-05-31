@@ -1,7 +1,7 @@
 /* Client-side image compression — shrink big phone photos before upload so they
    use far less storage/bandwidth. Returns a JPEG File; non-images or already-
    small files pass through unchanged. Runs in the browser (uses canvas). */
-export async function compressImage(file, { maxDim = 1600, quality = 0.8 } = {}) {
+export async function compressImage(file, { maxDim = 1600, quality = 0.5 } = {}) {
   try {
     if (!file || !file.type || !file.type.startsWith('image/')) return file;
     if (file.type === 'image/gif') return file;            // keep animation
