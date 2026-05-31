@@ -880,6 +880,67 @@ export default function App() {
     await reloadTop();
   };
 
+  // Build a printable project report (progress detail + photos) and open it
+  // for the browser's "Save as PDF". Available to every role.
+  const handleReport = () => {
+    const p = activeProject;
+    const phases = detail?.phases || [];
+    const updates = detail?.updates || [];
+    const totals = phases.reduce((a, ph) => { const tks = ph.tasks || []; return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length }; }, { t: 0, d: 0 });
+    const overall = totals.t ? Math.round((totals.d / totals.t) * 100) : (p?.progress ?? 0);
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+    const today = new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+    const phasesHtml = phases.map((ph, i) => {
+      const tks = ph.tasks || []; const t = tks.length; const dn = tks.filter(x => x.done).length;
+      const pct = t ? Math.round((dn / t) * 100) : ph.pct;
+      const items = tks.map(it => `<li>${it.done ? '&#9745;' : '&#9744;'} ${esc(it.title)}${it.due_date ? ` <span class="muted">(${fmt(it.due_date)}${it.end_date ? ` &rarr; ${fmt(it.end_date)}` : ''})</span>` : ''}</li>`).join('');
+      return `<div class="phase"><div class="ph-h"><b>${i + 1}. ${esc(ph.name)}</b><span>${dn}/${t} items &middot; ${pct}%</span></div>${items ? `<ul>${items}</ul>` : '<p class="muted">No items.</p>'}</div>`;
+    }).join('');
+    const photosHtml = updates.filter(u => u.thumb).map(u => `<figure class="photo"><img src="${u.thumb}"/><figcaption>${esc(u.room || '')}${u.date ? ' &middot; ' + esc(u.date) : ''}</figcaption></figure>`).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p?.name || 'Project')} report</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;color:#1d1d1b;margin:0;padding:34px}
+  h1{font-size:24px;margin:0 0 2px}
+  .sub{color:#666;font-size:12.5px;margin-bottom:18px}
+  .hero{background:#2b2b26;color:#fff;border-radius:14px;padding:22px}
+  .pct{font-size:46px;font-weight:800;color:#cfe04a;line-height:1}
+  .bar{height:9px;background:rgba(255,255,255,.16);border-radius:6px;margin:12px 0;overflow:hidden}
+  .bar>span{display:block;height:100%;background:#cfe04a}
+  .meta{display:flex;justify-content:space-between;font-size:12px;color:#c4c4bd}
+  h2{font-size:15px;border-bottom:2px solid #ececec;padding-bottom:6px;margin:24px 0 12px}
+  .phase{margin-bottom:12px}
+  .ph-h{display:flex;justify-content:space-between;font-size:14px}
+  ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+  li{margin:2px 0}
+  .muted{color:#8a8a8a;font-size:12px}
+  .photos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .photo{margin:0}
+  .photo img{width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;background:#eee}
+  figcaption{font-size:11px;color:#555;margin-top:3px}
+  .foot{margin-top:28px;font-size:11px;color:#9a9a9a;border-top:1px solid #ececec;padding-top:10px}
+  @media print{body{padding:0 6px}.photo img{height:135px}}
+</style></head><body>
+  <h1>${esc(p?.name || 'Project')}</h1>
+  <div class="sub">${esc(p?.code || '')}${p?.type ? ' &middot; ' + esc(p.type) : ''} &middot; Generated ${today}</div>
+  <div class="hero">
+    <div class="pct">${overall}%</div>
+    <div class="bar"><span style="width:${overall}%"></span></div>
+    <div class="meta"><span>${esc(p?.type || 'Renovation project')}</span><span>Est. handover &middot; ${p?.est_handover ? fmt(p.est_handover) : '—'}</span></div>
+  </div>
+  <h2>Progress detail</h2>
+  ${phasesHtml || '<p class="muted">No phases yet.</p>'}
+  ${photosHtml ? `<h2>Photos</h2><div class="photos">${photosHtml}</div>` : ''}
+  <div class="foot">INH Renovation &amp; Design &mdash; project report. Generated ${today}.</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},500);};</script>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('Please allow pop-ups for this site to download the report.'); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
   const handleEditProject = async (form) => {
     const id = activeProject?.id;
     if (!id) return;
@@ -1104,6 +1165,7 @@ export default function App() {
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
+          onReport={handleReport}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1143,6 +1205,7 @@ export default function App() {
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
+          onReport={handleReport}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}

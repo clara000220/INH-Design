@@ -37,7 +37,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -116,6 +116,13 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             )
           )}
         </div>
+
+        {onReport && (
+          <button onClick={onReport}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--fg-1)', borderRadius: 14, padding: '12px', fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+            <Icon name="download" size={17} color="var(--fg-2)" /> Download report
+          </button>
+        )}
 
         {/* What's happening now — derived from the schedule */}
         {(() => {
