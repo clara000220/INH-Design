@@ -812,7 +812,7 @@ export default function App() {
 
   // Load storage usage when the Plan screen opens (and after project deletes).
   useEffect(() => {
-    if (IS_LIVE && top?.type === 'plan') api.getStorageUsage().then(setStorageBytes).catch(() => {});
+    if (IS_LIVE && (top?.type === 'plan' || top?.type === 'users')) api.getStorageUsage().then(setStorageBytes).catch(() => {});
   }, [top, projects]);
 
   // ---- auth handlers ----
@@ -1202,7 +1202,7 @@ export default function App() {
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
-          onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} />;
+          onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} storageBytes={storageBytes} />;
       if (top.type === 'documents')
         return <DocumentsScreen role={role} documents={live(detail?.documents)}
           onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;

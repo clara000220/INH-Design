@@ -329,8 +329,10 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 /* =================== USERS DIRECTORY (owner, under More) =================== */
 const ROLE_OPTIONS = ['owner', 'admin', 'homeowner'];
 
-export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, meId }) {
+export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, meId, storageBytes = 0 }) {
   const count = users.length;
+  const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
+  const storagePct = Math.min(100, Math.round((storageBytes / (10 * GB)) * 100));
   const [edit, setEdit] = useState(null);   // user being edited
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -353,13 +355,26 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, me
     <div className="inh-scroll">
       <div className="inh-pad">
         <Btn variant="charcoal" icon="user-plus" onClick={onInvite} style={{ marginBottom: 16 }}>{t('Add account')}</Btn>
-        <div className="inh-hero" style={{ padding: 18, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="users" size={24} color="var(--inh-lime)" />
+        <div className="inh-hero" style={{ padding: 18, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div>
+              <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 30, lineHeight: 1 }}>{internal} <span style={{ color: 'var(--on-dark-2)', fontSize: 16 }}>/ 20</span></div>
+              <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginTop: 5 }}>Internal users (owner / admin)</div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="inh-figure" style={{ color: 'var(--on-dark)', fontSize: 17 }}>{count}</div>
+              <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{t('registered')}</div>
+            </div>
           </div>
-          <div>
-            <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 30, lineHeight: 1 }}>{count}</div>
-            <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginTop: 4 }}>{count === 1 ? t('user') : t('users')} {t('registered')}</div>
+          <div style={{ height: 7, background: 'rgba(255,255,255,.16)', borderRadius: 5, marginTop: 12, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: Math.min(100, (internal / 20) * 100) + '%', background: internal >= 20 ? 'var(--warning)' : 'var(--inh-lime)' }} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, color: 'var(--on-dark-2)', fontSize: 12 }}>
+            <span>Storage</span><span>{fmtBytes(storageBytes)} / 10 GB</span>
+          </div>
+          <div style={{ height: 7, background: 'rgba(255,255,255,.16)', borderRadius: 5, marginTop: 6, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: storagePct + '%', background: storagePct > 90 ? 'var(--warning)' : 'var(--inh-lime)' }} />
           </div>
         </div>
         <div className="inh-card" style={{ overflow: 'hidden' }}>
