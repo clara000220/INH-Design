@@ -54,7 +54,7 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
 }
 
 /* =================== FEES — overview (OWNER ONLY) =================== */
-export function FeesScreen({ fees = INH_DATA.projects, onOpenProject }) {
+export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = true, pendingCount = 0 }) {
   const [filter, setFilter] = useState('All');
   const totals = fees.reduce((a, p) => ({
     committed: a.committed + p.committed, released: a.released + p.released, pending: a.pending + p.pending,
@@ -63,11 +63,17 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject }) {
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {isOwner && pendingCount > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--inh-lime-soft)', border: '1px solid var(--inh-lime)', borderRadius: 12, padding: '12px 14px' }}>
+            <Icon name="bell" size={18} color="var(--inh-charcoal)" />
+            <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: 'var(--inh-charcoal)' }}>{pendingCount} payment{pendingCount === 1 ? '' : 's'} pending your approval</div>
+          </div>
+        )}
         {/* summary band */}
         <div className="inh-hero">
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
             <Icon name="shield" size={15} color="var(--inh-lime)" />
-            <span className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>Fees Release · Owner only</span>
+            <span className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{isOwner ? 'Fees Release · Owner only' : 'Fees · Admin can request'}</span>
           </div>
           <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginBottom: 3 }}>Committed to contractors</div>
           <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 38, marginBottom: 14 }}>{rm(totals.committed)}</div>
@@ -116,13 +122,13 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject }) {
 
 /* Add / edit a contractor payment. No bank account numbers are stored — only
    a method label (e.g. "Bank transfer") and the amount. */
-function PaymentForm({ pay, onClose, onSave }) {
+function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
   const [f, setF] = useState({
     contractor: pay?.contractor || '', stage: pay?.stage || '',
     amount: pay?.amount != null ? String(pay.amount) : '',
     method: pay?.method || 'Bank transfer',
     due_date: pay?.due_date ? String(pay.due_date).slice(0, 10) : '',
-    status: pay?.status || 'pending',
+    status: canSetStatus ? (pay?.status || 'pending') : 'pending',
   });
   const [items, setItems] = useState(pay?.items?.length ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '' })) : []);
   const [busy, setBusy] = useState(false);
@@ -178,23 +184,29 @@ function PaymentForm({ pay, onClose, onSave }) {
           </div>
         </div>
         <Field label="Due date" icon="calendar" type="date" value={f.due_date} onChange={set('due_date')} placeholder="" />
-        <div>
-          <label className="inh-label">Status</label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[['pending', 'Pending'], ['released', 'Released'], ['hold', 'On hold'], ['overdue', 'Overdue']].map(([v, l]) => (
-              <button key={v} onClick={() => set('status')(v)} className={'inh-chip' + (f.status === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
-            ))}
+        {canSetStatus ? (
+          <div>
+            <label className="inh-label">Status</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[['pending', 'Pending'], ['released', 'Released'], ['hold', 'On hold'], ['overdue', 'Overdue']].map(([v, l]) => (
+                <button key={v} onClick={() => set('status')(v)} className={'inh-chip' + (f.status === v ? ' active' : '')} style={{ flex: 1 }}>{l}</button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="body-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="clock" size={15} color="var(--warning)" /> This is sent to the owner as a <b style={{ color: 'var(--fg-1)' }}>pending</b> request to approve.
+          </p>
+        )}
       </div>
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
-      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : (pay ? 'Save changes' : 'Add payment')}</Btn></div>
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : (pay ? 'Save changes' : (canSetStatus ? 'Add payment' : 'Request payment'))}</Btn></div>
     </Sheet>
   );
 }
 
 /* =================== FEES — project payment detail =================== */
-export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus, onAdd, onEdit, onDelete }) {
+export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus, onAdd, onEdit, onDelete, canSetStatus = true }) {
   const [confirm, setConfirm] = useState(null); // {pay, action}
   const [payments, setPayments] = useState(paymentsProp);
   const [toast, setToast] = useState(null);
@@ -273,10 +285,15 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                       <span className="meta">{p.date} · {p.method}</span>
                       <Pill status={p.status} />
                     </div>
-                    {(p.status === 'pending' || p.status === 'overdue' || p.status === 'hold') && (
+                    {onSetStatus && (p.status === 'pending' || p.status === 'overdue' || p.status === 'hold') && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         <Btn variant="charcoal" size="sm" icon="check" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'release' }); }}>Approve &amp; release</Btn>
                         {p.status !== 'hold' && <Btn variant="ghost" size="sm" icon="pause" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'hold' }); }}>Hold</Btn>}
+                      </div>
+                    )}
+                    {!onSetStatus && p.status === 'pending' && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: 'var(--warning)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Icon name="clock" size={13} color="var(--warning)" /> Awaiting owner approval
                       </div>
                     )}
                   </div>
@@ -337,7 +354,7 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
       )}
 
       {form && (
-        <PaymentForm pay={form.pay} onClose={() => setForm(null)}
+        <PaymentForm pay={form.pay} canSetStatus={canSetStatus} onClose={() => setForm(null)}
           onSave={(data) => (form.pay ? onEdit(form.pay.id, data) : onAdd(data))} />
       )}
 

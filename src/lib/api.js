@@ -422,7 +422,15 @@ export async function setPaymentStatus(id, status) {
   if (error) throw error; // trigger writes the audit row + stamps released_at
 }
 
-// Owner-only (RLS): add a contractor payment to a project.
+// Count of payments awaiting owner approval (for the reminder badge).
+export async function pendingPaymentCount() {
+  const { count, error } = await supabase.from('payments')
+    .select('id', { count: 'exact', head: true }).in('status', ['pending', 'overdue']);
+  if (error) throw error;
+  return count || 0;
+}
+
+// Staff (RLS): add a contractor payment. Admins may only add a pending request.
 export async function addPayment(projectId, { contractor, stage, amount, method, due_date, status = 'pending', items = [] }) {
   const { error } = await supabase.from('payments').insert({
     project_id: projectId, contractor, stage, amount,

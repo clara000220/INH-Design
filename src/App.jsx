@@ -787,6 +787,7 @@ export default function App() {
   const [feedProjectId, setFeedProjectId] = useState(null);   // which project the owner views on Updates/Documents
   const [storageBytes, setStorageBytes] = useState(0);
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);   // default add-project items
+  const [pendingFees, setPendingFees] = useState(0);            // payments awaiting owner approval
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -848,14 +849,15 @@ export default function App() {
     const r = await Promise.allSettled([
       api.listProjects(), api.getMyProfile(), api.listUsers(),
       api.listHomeowners(), api.listProjectFees(), api.listAudit(), api.listCredentials(),
-      api.getStorageUsage(), api.getProjectTemplate(),
+      api.getStorageUsage(), api.getProjectTemplate(), api.pendingPaymentCount(),
     ]);
-    const [p, pr, us, ho, fe, au, cr, sb, tpl] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    const [p, pr, us, ho, fe, au, cr, sb, tpl, pc] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
     if (p) setProjects(p);
     if (pr) setProfile(pr);
     if (us) setUsers(cr ? us.map(u => ({ ...u, ...(cr[u.id] || {}) })) : us);
     if (sb != null) setStorageBytes(sb);
     if (tpl && tpl.length) setTemplate(tpl);
+    if (pc != null) setPendingFees(pc);
     if (ho) setHomeowners(ho);
     if (fe) setFees(fe);
     if (au) setAudit(au);
@@ -1345,7 +1347,7 @@ export default function App() {
         : { eyebrow: 'INH Design & Build', title: 'Projects', onBell: () => {} },
       updates:   { eyebrow: 'INH Design & Build', title: 'Updates', property: currentProject?.name, onProperty: projects.length > 1 ? () => setSheet('property') : undefined, onBell: () => {} },
       documents: { eyebrow: 'INH Design & Build', title: 'Documents', property: currentProject?.name, onProperty: projects.length > 1 ? () => setSheet('property') : undefined },
-      fees:      { eyebrow: 'Owner only', title: 'Fees Release' },
+      fees:      { eyebrow: role === 'owner' ? 'Owner approves' : 'Request payments', title: 'Fees Release' },
       more:      { title: 'More' },
     }[tab];
     return <AppHeader role={role} profile={me} {...base} onAvatar={() => setTab('more')} />;
@@ -1379,7 +1381,11 @@ export default function App() {
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
-          onSetStatus={handleSetPayment} onAdd={handleAddPayment} onEdit={handleEditPayment} onDelete={handleDeletePayment} />;
+          onAdd={handleAddPayment}
+          onSetStatus={role === 'owner' ? handleSetPayment : null}
+          onEdit={role === 'owner' ? handleEditPayment : null}
+          onDelete={role === 'owner' ? handleDeletePayment : null}
+          canSetStatus={role === 'owner'} />;
       if (top.type === 'plan')
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
       if (top.type === 'template')
@@ -1438,7 +1444,7 @@ export default function App() {
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
     if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
       onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
-    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} />;
+    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} isOwner={role === 'owner'} pendingCount={pendingFees} />;
     if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
       onAddAccount={IS_LIVE ? () => setSheet('invite') : null}
@@ -1457,11 +1463,11 @@ export default function App() {
   else if (auth === 'forgot') device = <ForgotFlow onBack={() => setAuth('login')} onDone={() => setAuth('login')} />;
   else device = (
     <div className="inh-app">
-      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} profile={me} storageBytes={storageBytes} />
+      <Sidebar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} onSignOut={signOut} profile={me} storageBytes={storageBytes} badges={role === 'owner' ? { fees: pendingFees } : undefined} />
       <div className="inh-main">
         {header()}
         {body()}
-        <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} />
+        <TabBar role={role} active={tab} onChange={t => { setTab(t); setStack([]); }} badges={role === 'owner' ? { fees: pendingFees } : undefined} />
       </div>
       {sheet === 'property' && <PropertySheet role={role} projects={projects} selectedId={currentProject?.id} onSelect={setFeedProjectId} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}

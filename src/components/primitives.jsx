@@ -111,6 +111,7 @@ export const TAB_DEFS = {
     { id: 'home', label: 'Projects', icon: 'briefcase' },
     { id: 'updates', label: 'Updates', icon: 'image' },
     { id: 'documents', label: 'Documents', icon: 'file-text' },
+    { id: 'fees', label: 'Fees', icon: 'banknote' },
     { id: 'more', label: 'More', icon: 'more-horizontal' },
   ],
   owner: [
@@ -123,7 +124,7 @@ export const TAB_DEFS = {
 };
 
 /* Desktop sidebar — replaces the bottom tab bar at >=960px */
-export function Sidebar({ role, active, onChange, onSignOut, profile, storageBytes = 0 }) {
+export function Sidebar({ role, active, onChange, onSignOut, profile, storageBytes = 0, badges }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta?.person;
@@ -145,6 +146,9 @@ export function Sidebar({ role, active, onChange, onSignOut, profile, storageByt
           <button key={tab.id} className={'inh-navitem' + (active === tab.id ? ' active' : '')} onClick={() => onChange(tab.id)}>
             <Icon name={tab.icon} size={20} stroke={active === tab.id ? 2.2 : 2} />
             <span>{t(tab.label)}</span>
+            {badges && badges[tab.id] > 0 && (
+              <span style={{ marginLeft: 'auto', background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 999, fontSize: 10.5, fontWeight: 800, minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{badges[tab.id]}</span>
+            )}
           </button>
         ))}
       </nav>
@@ -176,13 +180,18 @@ export function Sidebar({ role, active, onChange, onSignOut, profile, storageByt
   );
 }
 
-export function TabBar({ role, active, onChange }) {
+export function TabBar({ role, active, onChange, badges }) {
   const tabs = TAB_DEFS[role] || TAB_DEFS.homeowner;
   return (
     <div className="inh-tabbar">
       {tabs.map(tab => (
         <button key={tab.id} className={'inh-tab' + (active === tab.id ? ' active' : '')} onClick={() => onChange(tab.id)}>
-          <span className="inh-tab__ico"><Icon name={tab.icon} size={21} stroke={active === tab.id ? 2.2 : 2} /></span>
+          <span className="inh-tab__ico" style={{ position: 'relative' }}>
+            <Icon name={tab.icon} size={21} stroke={active === tab.id ? 2.2 : 2} />
+            {badges && badges[tab.id] > 0 && (
+              <span style={{ position: 'absolute', top: -3, right: -7, background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 999, fontSize: 9, fontWeight: 800, minWidth: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>{badges[tab.id]}</span>
+            )}
+          </span>
           <span>{t(tab.label)}</span>
         </button>
       ))}
