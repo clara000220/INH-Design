@@ -124,15 +124,21 @@ function PaymentForm({ pay, onClose, onSave }) {
     due_date: pay?.due_date ? String(pay.due_date).slice(0, 10) : '',
     status: pay?.status || 'pending',
   });
+  const [items, setItems] = useState(pay?.items?.length ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '' })) : []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
+  const addItem = () => setItems(s => [...s, { title: '', amount: '' }]);
+  const setItem = (i, k, v) => setItems(s => s.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
+  const removeItem = (i) => setItems(s => s.filter((_, idx) => idx !== i));
+  const itemsTotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
   const ready = f.contractor.trim() && f.amount !== '' && !isNaN(Number(f.amount));
   const save = async () => {
     if (!ready) return;
     setBusy(true); setErr(null);
+    const cleanItems = items.map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0 })).filter(it => it.title);
     try {
-      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status });
+      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
       onClose();
     } catch (e) { setErr(e?.message || 'Could not save payment'); }
     finally { setBusy(false); }
@@ -143,6 +149,26 @@ function PaymentForm({ pay, onClose, onSave }) {
         <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
         <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
         <Field label="Amount (RM)" icon="banknote" type="number" value={f.amount} onChange={set('amount')} placeholder="e.g. 14200" />
+        <div>
+          <label className="inh-label">Items / breakdown (optional)</label>
+          {items.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="e.g. Main cable"
+                    style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+                  <input value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="RM" type="number"
+                    style={{ width: 82, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+                  <button onClick={() => removeItem(i)} aria-label="Remove item" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button onClick={addItem} className="inh-link" style={{ fontSize: 12.5 }}>+ Add item</button>
+            {items.length > 0 && <button onClick={() => set('amount')(String(itemsTotal))} className="inh-link" style={{ fontSize: 12.5 }}>Use total ({rm(itemsTotal)})</button>}
+          </div>
+        </div>
         <div>
           <label className="inh-label">Method</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -234,6 +260,15 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                       </div>
                     </div>
                     <div className="inh-row__sub">{p.stage}</div>
+                    {p.items && p.items.length > 0 && (
+                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {p.items.map((it, ix) => (
+                          <div key={ix} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--fg-2)' }}>
+                            <span>· {it.title}</span><span>{rm(it.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                       <span className="meta">{p.date} · {p.method}</span>
                       <Pill status={p.status} />
