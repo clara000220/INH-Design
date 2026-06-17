@@ -15,6 +15,6 @@ drop policy if exists app_settings_write  on public.app_settings;
 -- Any signed-in user can read the template (the Add-project picker needs it).
 create policy app_settings_select on public.app_settings
   for select using (auth.uid() is not null);
--- Only the owner can change it.
+-- Owner or admin (staff) can edit the default item template.
 create policy app_settings_write on public.app_settings
-  for all using (public.is_owner()) with check (public.is_owner());
+  for all using (public.is_staff()) with check (public.is_staff());

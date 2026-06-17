@@ -125,8 +125,9 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           const sd = project?.stage_dates || {};
           const shortDate = iso => (iso ? new Date(iso).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : '');
           const created = project?.created_at ? new Date(project.created_at) : null;
+          const createdStr = created && !isNaN(created) ? created.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
           const days = created && !isNaN(created) ? Math.floor((Date.now() - created.getTime()) / 86400000) : null;
-          const agoText = days == null ? '' : days <= 0 ? 'Created today' : days === 1 ? 'Created 1 day ago' : `Created ${days} days ago`;
+          const agoText = days == null ? '' : `Created ${createdStr} · ${days <= 0 ? 'today' : days === 1 ? '1 day ago' : days + ' days ago'}`;
           return (
             <div>
               <div className="inh-section">Client status</div>

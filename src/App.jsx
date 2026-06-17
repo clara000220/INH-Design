@@ -1458,7 +1458,7 @@ export default function App() {
       {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)}
-        onEditTemplate={role === 'owner' ? () => { setSheet(null); push({ type: 'template' }); } : null} />}
+        onEditTemplate={CAN_EDIT(role) ? () => { setSheet(null); push({ type: 'template' }); } : null} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onCreate={handleAddProject} onAddItems={handleAddProjectItems} suggestedCode={nextProjectCode} template={template} />}
       {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
