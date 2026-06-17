@@ -122,6 +122,11 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           const STAGES = [['measure', 'Measure'], ['quotation', 'Quotation'], ['contract', 'Contract'], ['deposit', 'Deposit']];
           const cur = Math.max(0, STAGES.findIndex(s => s[0] === (project?.stage || 'measure')));
           const editable = CAN_EDIT(role) && onSetStage;
+          const sd = project?.stage_dates || {};
+          const shortDate = iso => (iso ? new Date(iso).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : '');
+          const created = project?.created_at ? new Date(project.created_at) : null;
+          const days = created && !isNaN(created) ? Math.floor((Date.now() - created.getTime()) / 86400000) : null;
+          const agoText = days == null ? '' : days <= 0 ? 'Created today' : days === 1 ? 'Created 1 day ago' : `Created ${days} days ago`;
           return (
             <div>
               <div className="inh-section">Client status</div>
@@ -136,11 +141,15 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                         <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, lineHeight: 1.2, color: active ? 'var(--fg-1)' : done ? 'var(--fg-2)' : 'var(--fg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                           {done && <Icon name="check" size={11} color="var(--success)" stroke={3} />}{label}
                         </div>
+                        <div style={{ marginTop: 2, fontSize: 9.5, color: 'var(--fg-3)', minHeight: 12 }}>{sd[key] ? shortDate(sd[key]) : ''}</div>
                       </button>
                     );
                   })}
                 </div>
-                {editable && <p className="meta" style={{ marginTop: 10 }}>Tap a stage to update the client status.</p>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 8 }}>
+                  {agoText && <span className="meta">{agoText}</span>}
+                  {editable && <span className="meta">Tap a stage to update</span>}
+                </div>
               </div>
             </div>
           );

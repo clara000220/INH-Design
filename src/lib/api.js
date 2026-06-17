@@ -42,7 +42,8 @@ export async function listProjects() {
   if (error) throw error;
   return (data || []).map(p => ({
     id: p.id, name: p.name, code: p.code, address: p.address, type: p.type,
-    progress: p.progress, status: p.status, est_handover: p.est_handover, stage: p.stage,
+    progress: p.progress, status: p.status, est_handover: p.est_handover,
+    stage: p.stage, stage_dates: p.stage_dates || {}, created_at: p.created_at,
   }));
 }
 
@@ -201,7 +202,7 @@ export async function deleteProject(id) {
 // Edit a project's details (name, code, address, type, est. handover).
 export async function updateProject(id, patch = {}) {
   const clean = {};
-  ['name', 'code', 'address', 'type', 'est_handover', 'stage'].forEach(k => {
+  ['name', 'code', 'address', 'type', 'est_handover', 'stage', 'stage_dates'].forEach(k => {
     if (patch[k] !== undefined) clean[k] = patch[k] === '' ? null : patch[k];
   });
   const { error } = await supabase.from('projects').update(clean).eq('id', id);
