@@ -329,13 +329,22 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 /* =================== USERS DIRECTORY (owner, under More) =================== */
 const ROLE_OPTIONS = ['owner', 'admin', 'homeowner'];
 
-export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, meId, storageBytes = 0 }) {
+export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, onDeleteUser, meId, storageBytes = 0 }) {
   const count = users.length;
   const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
   const storagePct = Math.min(100, Math.round((storageBytes / (10 * GB)) * 100));
   const [edit, setEdit] = useState(null);   // user being edited
+  const [delUser, setDelUser] = useState(null);   // user pending delete confirm
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  const removeUser = async () => {
+    if (!delUser || !onDeleteUser) return;
+    setBusy(true); setErr(null);
+    try { await onDeleteUser(delUser.id); setDelUser(null); setEdit(null); }
+    catch (e) { setErr(e?.message || 'Could not delete user'); setDelUser(null); }
+    finally { setBusy(false); }
+  };
   const [revealed, setRevealed] = useState(() => new Set());
   const [copied, setCopied] = useState(null);
   const canEdit = !!onChangeRole;           // live + owner
@@ -447,7 +456,27 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, me
           </div>
           {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err}</p>}
           {busy && <p className="meta" style={{ marginTop: 10 }}>Saving…</p>}
+          {onDeleteUser && (
+            <button onClick={() => setDelUser(edit)} disabled={busy}
+              style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+              <Icon name="trash" size={15} color="var(--error)" /> Delete user
+            </button>
+          )}
         </Sheet>
+      )}
+
+      {delUser && (
+        <Dialog onClose={() => setDelUser(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="trash" size={24} color="var(--error)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Delete this user?</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}><b style={{ color: 'var(--fg-1)' }}>{delUser.name}</b> and their access will be permanently removed. This can't be undone.</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setDelUser(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="danger" onClick={removeUser} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</Btn>
+          </div>
+        </Dialog>
       )}
     </div>
   );

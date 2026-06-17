@@ -493,6 +493,13 @@ export async function listCredentials() {
   return map;
 }
 
+// Owner-only: permanently delete a user (auth account + profile + memberships +
+// stored credentials cascade). Enforced server-side in the delete_user function.
+export async function deleteUser(userId) {
+  const { error } = await supabase.rpc('delete_user', { target: userId });
+  if (error) throw error;
+}
+
 // Owner-only: change a user's role. RLS (profiles_owner_all) + the
 // guard_profile_role trigger enforce that only an owner can do this server-side.
 export async function setUserRole(userId, role) {

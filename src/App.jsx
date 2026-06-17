@@ -871,6 +871,12 @@ export default function App() {
     await reloadTop();
   };
 
+  const handleDeleteUser = async (userId) => {
+    if (!IS_LIVE) return;
+    await api.deleteUser(userId);
+    await reloadTop();
+  };
+
   const handleAddAccount = async ({ email, login, password, fullName, role }) => {
     if (!IS_LIVE) return;
     if ((role === 'owner' || role === 'admin') && internalCount() >= 20) {
@@ -1204,7 +1210,9 @@ export default function App() {
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
-          onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null} meId={profile?.id} storageBytes={storageBytes} />;
+          onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null}
+          onDeleteUser={role === 'owner' && IS_LIVE ? handleDeleteUser : null}
+          meId={profile?.id} storageBytes={storageBytes} />;
       if (top.type === 'documents')
         return <DocumentsScreen role={role} documents={live(detail?.documents)}
           onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
