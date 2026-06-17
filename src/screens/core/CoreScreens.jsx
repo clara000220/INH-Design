@@ -6,6 +6,17 @@ import { INH_DATA } from '../../data/data.js';
 
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
+// "5 days ago" / "today" / "in 3 days" for a YYYY-MM-DD start date.
+function startRel(iso) {
+  if (!iso) return '';
+  const d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+  if (isNaN(d)) return '';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  if (diff === 0) return 'today';
+  return diff > 0 ? `${diff} day${diff === 1 ? '' : 's'} ago` : `in ${-diff} day${-diff === 1 ? '' : 's'}`;
+}
+
 // Status derived from progress + est. handover date (overdue is date-driven).
 export function projectStatus(p) {
   const pct = p?.progress ?? 0;
@@ -313,7 +324,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                           <button onClick={() => onOpenTask && onOpenTask(t)}
                             style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, textAlign: 'left', cursor: onOpenTask ? 'pointer' : 'default', minWidth: 0 }}>
                             <span style={{ flex: 1, fontSize: 13.5, color: t.done ? 'var(--fg-3)' : 'var(--fg-1)', textDecoration: t.done ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                            {t.due_date && <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="calendar" size={11} color="var(--fg-3)" />{new Date(t.due_date).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}</span>}
+                            {t.due_date && <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="calendar" size={11} color="var(--fg-3)" />{new Date(String(t.due_date).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}{startRel(t.due_date) ? ` · ${startRel(t.due_date)}` : ''}</span>}
                             {t.note && <Icon name="file-text" size={13} color="var(--fg-3)" />}
                           </button>
                           {editable && onItemPhoto && (
