@@ -157,7 +157,7 @@ export function Register({ onSignUp, onBack }) {
     <AuthShell>
       <button className="inh-iconbtn" onClick={onBack} style={{ marginBottom: 24 }}><Icon name="arrow-left" size={20} /></button>
       <h1 className="h1" style={{ fontSize: 26, marginBottom: 6 }}>Create your account</h1>
-      <p className="body-2" style={{ marginBottom: 24 }}>Sign up and we'll email you a confirmation link.</p>
+      <p className="body-2" style={{ marginBottom: 24 }}>Sign up with your email and a password to get started.</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Field label="Full name" icon="user" value={name} onChange={setName} placeholder="Your name" autoFocus />
