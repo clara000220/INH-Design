@@ -515,6 +515,14 @@ export async function listHomeowners() {
   return (data || []).map(u => ({ id: u.id, name: u.full_name, initials: u.initials || initialsOf(u.full_name) }));
 }
 
+// Owner-only: the project ids a user is assigned to (for the Users screen).
+export async function listUserProjects(userId) {
+  const { data, error } = await supabase.from('project_members')
+    .select('project_id').eq('user_id', userId);
+  if (error) throw error;
+  return (data || []).map(r => r.project_id);
+}
+
 export async function listMembers(projectId) {
   const { data, error } = await supabase.from('project_members')
     .select('user_id, profiles(full_name, initials, role)').eq('project_id', projectId);

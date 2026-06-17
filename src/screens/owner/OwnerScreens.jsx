@@ -329,7 +329,7 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 /* =================== USERS DIRECTORY (owner, under More) =================== */
 const ROLE_OPTIONS = ['owner', 'admin', 'homeowner'];
 
-export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, onDeleteUser, meId, storageBytes = 0 }) {
+export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, onDeleteUser, projects = [], onUserProjects, onAssignProject, onUnassignProject, meId, storageBytes = 0 }) {
   const count = users.length;
   const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
   const storagePct = Math.min(100, Math.round((storageBytes / (10 * GB)) * 100));
@@ -337,6 +337,30 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
   const [delUser, setDelUser] = useState(null);   // user pending delete confirm
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [memberIds, setMemberIds] = useState(null);   // project ids the edited user is in
+  const [mBusy, setMBusy] = useState(null);           // project id being toggled
+
+  useEffect(() => {
+    if (!edit || !onUserProjects) { setMemberIds(null); return; }
+    let active = true;
+    setMemberIds(null);
+    onUserProjects(edit.id)
+      .then(ids => { if (active) setMemberIds(new Set(ids)); })
+      .catch(() => { if (active) setMemberIds(new Set()); });
+    return () => { active = false; };
+  }, [edit]);
+
+  const toggleProject = async (pid) => {
+    if (!memberIds) return;
+    const isMember = memberIds.has(pid);
+    setMBusy(pid); setErr(null);
+    try {
+      if (isMember) await onUnassignProject(pid, edit.id);
+      else await onAssignProject(pid, edit.id);
+      setMemberIds(s => { const n = new Set(s); isMember ? n.delete(pid) : n.add(pid); return n; });
+    } catch (e) { setErr(e?.message || 'Could not update access'); }
+    finally { setMBusy(null); }
+  };
 
   const removeUser = async () => {
     if (!delUser || !onDeleteUser) return;
@@ -454,6 +478,32 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
               );
             })}
           </div>
+          {onAssignProject && (
+            <div style={{ marginTop: 18 }}>
+              <label className="inh-label">Assigned projects</label>
+              {edit.role === 'owner' ? (
+                <p className="body-2">Owners can access all projects.</p>
+              ) : !memberIds ? (
+                <p className="body-2">Loading…</p>
+              ) : projects.length === 0 ? (
+                <p className="body-2">No projects yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {projects.map(p => {
+                    const isM = memberIds.has(p.id);
+                    return (
+                      <button key={p.id} onClick={() => toggleProject(p.id)} disabled={mBusy === p.id} className="inh-row"
+                        style={{ borderRadius: 12, border: '1px solid var(--border)', background: isM ? 'var(--inh-lime-soft)' : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                        <div className="inh-row__ico" style={{ background: 'var(--surface-2)' }}><Icon name="building" size={18} color="var(--fg-2)" /></div>
+                        <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14 }}>{p.name}</div><div className="inh-row__sub">{p.code}</div></div>
+                        <Icon name={isM ? 'check-circle' : 'circle'} size={20} color={isM ? 'var(--success)' : 'var(--fg-3)'} stroke={isM ? 2.2 : 1.8} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err}</p>}
           {busy && <p className="meta" style={{ marginTop: 10 }}>Saving…</p>}
           {onDeleteUser && (
