@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon.jsx';
 import { Btn } from '../../components/primitives.jsx';
-import { setRemember, normalizeLogin } from '../../lib/supabase.js';
+import { setRemember, normalizeLogin, supabase, IS_LIVE } from '../../lib/supabase.js';
 
 export function Logo({ height = 54 }) {
   return <img src="/assets/inh-logo.png" alt="INH Renovation & Design" style={{ height, width: 'auto', display: 'block' }} />;
@@ -187,6 +187,38 @@ export function ForgotFlow({ onBack, onDone }) {
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const codeStr = code.join('');
+
+  // Step 1 — email the 6-digit recovery code (Supabase OTP recovery).
+  const sendCode = async () => {
+    if (!EMAIL_RE.test(contact.trim())) { setErr({ msg: 'Enter the email on your account' }); return; }
+    setErr(null); setBusy(true);
+    try {
+      if (IS_LIVE) await supabase.auth.resetPasswordForEmail(contact.trim().toLowerCase());
+      setStep(2);
+    } catch (e) { setErr({ msg: e?.message || 'Could not send the code' }); }
+    finally { setBusy(false); }
+  };
+
+  // Step 2 — verify the code, then set the new password.
+  const saveNew = async () => {
+    if (!(pw.length >= 8 && pw === pw2 && codeStr.length === 6)) return;
+    setErr(null); setBusy(true);
+    try {
+      if (IS_LIVE) {
+        const { error } = await supabase.auth.verifyOtp({ email: contact.trim().toLowerCase(), token: codeStr, type: 'recovery' });
+        if (error) throw error;
+        const { error: e2 } = await supabase.auth.updateUser({ password: pw });
+        if (e2) throw e2;
+      }
+      setStep(3);
+    } catch (e) { setErr({ msg: e?.message || 'Invalid or expired code' }); }
+    finally { setBusy(false); }
+  };
 
   const strength = Math.min(4, (pw.length >= 6 ? 1 : 0) + (/[A-Z]/.test(pw) ? 1 : 0) + (/[0-9]/.test(pw) ? 1 : 0) + (/[^A-Za-z0-9]/.test(pw) ? 1 : 0));
   const strengthLabel = ['Too short', 'Weak', 'Fair', 'Good', 'Strong password'][strength];
@@ -201,12 +233,12 @@ export function ForgotFlow({ onBack, onDone }) {
     <AuthShell>
       <button className="inh-iconbtn" onClick={onBack} style={{ marginBottom: 24 }}><Icon name="arrow-left" size={20} /></button>
       <h1 className="h1" style={{ marginBottom: 6 }}>Reset your password</h1>
-      <p className="body-2" style={{ marginBottom: 24 }}>Enter the email or phone linked to your account and we'll send a reset code.</p>
-      <Field label="Email or phone" icon="mail" value={contact} onChange={setContact} placeholder="you@email.com" autoFocus />
+      <p className="body-2" style={{ marginBottom: 24 }}>Enter the email on your account and we'll send a 6-digit reset code.</p>
+      <Field label="Email" icon="mail" type="email" value={contact} onChange={setContact} placeholder="you@email.com" error={err?.msg} autoFocus />
       <div style={{ height: 24 }} />
-      <Btn variant="primary" onClick={() => setStep(2)}>Send reset code</Btn>
+      <Btn variant="primary" onClick={sendCode} disabled={busy}>{busy ? 'Sending…' : 'Send reset code'}</Btn>
       <p className="meta" style={{ textAlign: 'center', marginTop: 16, lineHeight: 1.5 }}>
-        If that account exists, a reset code is on its way.
+        If that account exists, a reset code is on its way. (Username-only accounts have no email to reset.)
       </p>
       <div style={{ flex: 1 }} />
       <div style={{ textAlign: 'center' }}><button className="inh-link" onClick={onBack}>Back to sign in</button></div>
@@ -217,7 +249,7 @@ export function ForgotFlow({ onBack, onDone }) {
     <AuthShell>
       <button className="inh-iconbtn" onClick={() => setStep(1)} style={{ marginBottom: 24 }}><Icon name="arrow-left" size={20} /></button>
       <h1 className="h1" style={{ marginBottom: 6 }}>Enter reset code</h1>
-      <p className="body-2" style={{ marginBottom: 22 }}>We sent a 6-digit code to your account. Enter it below, then set a new password.</p>
+      <p className="body-2" style={{ marginBottom: 22 }}>We sent a 6-digit code to <b style={{ color: 'var(--fg-1)' }}>{contact}</b>. Enter it below, then set a new password.</p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         {code.map((d, i) => (
           <input key={i} value={d} onChange={e => setDigit(i, e.target.value)} maxLength={1} inputMode="numeric"
@@ -244,8 +276,9 @@ export function ForgotFlow({ onBack, onDone }) {
         <Field label="Confirm password" icon="lock" password value={pw2} onChange={setPw2} placeholder="Re-enter password"
           error={pw2 && pw2 !== pw ? "Passwords don't match" : null} />
       </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err.msg}</p>}
       <div style={{ height: 24 }} />
-      <Btn variant="primary" disabled={!(pw.length >= 8 && pw === pw2)} onClick={() => setStep(3)}>Save new password</Btn>
+      <Btn variant="primary" disabled={busy || !(pw.length >= 8 && pw === pw2 && codeStr.length === 6)} onClick={saveNew}>{busy ? 'Saving…' : 'Save new password'}</Btn>
     </AuthShell>
   );
 
