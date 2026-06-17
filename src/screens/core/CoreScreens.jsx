@@ -137,11 +137,13 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     return (
                       <button key={key} onClick={editable ? () => onSetStage(key) : undefined} disabled={!editable}
                         style={{ flex: 1, border: 'none', background: 'transparent', padding: 0, cursor: editable ? 'pointer' : 'default', textAlign: 'center' }}>
-                        <div style={{ height: 6, borderRadius: 3, background: (done || active) ? 'var(--inh-lime)' : 'var(--surface-2)' }} />
-                        <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, lineHeight: 1.2, color: active ? 'var(--fg-1)' : done ? 'var(--fg-2)' : 'var(--fg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                          {done && <Icon name="check" size={11} color="var(--success)" stroke={3} />}{label}
+                        <div style={{ height: 7, borderRadius: 4, background: (done || active) ? 'var(--inh-lime)' : 'var(--surface-2)' }} />
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 11.5, fontWeight: active ? 800 : done ? 700 : 600, lineHeight: 1.15, color: active ? 'var(--inh-charcoal)' : done ? 'var(--fg-1)' : 'var(--fg-3)', background: active ? 'var(--inh-lime)' : 'transparent', borderRadius: 999, padding: active ? '3px 10px' : '3px 0', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            {done && <Icon name="check" size={12} color="var(--success)" stroke={3} />}{label}
+                          </span>
                         </div>
-                        <div style={{ marginTop: 2, fontSize: 9.5, color: 'var(--fg-3)', minHeight: 12 }}>{sd[key] ? shortDate(sd[key]) : ''}</div>
+                        <div style={{ marginTop: 3, fontSize: 9.5, color: active ? 'var(--inh-charcoal)' : 'var(--fg-3)', fontWeight: active ? 700 : 400, minHeight: 12 }}>{sd[key] ? shortDate(sd[key]) : ''}</div>
                       </button>
                     );
                   })}
