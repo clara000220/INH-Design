@@ -323,3 +323,51 @@
   .inh-auth .inh-scroll { display: flex; justify-content: center; }
   .inh-auth .inh-authwrap { max-width: 430px; }
 }
+
+/* ---------- Motion polish ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* screen content gently fades + rises on mount (page-transition feel) */
+  .inh-pad { animation: fadeRise .34s cubic-bezier(.2,.7,.3,1); }
+  @keyframes fadeRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* cards lift slightly on hover */
+  .inh-card { transition: box-shadow .22s ease, transform .22s ease, border-color .2s ease; }
+  .inh-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+
+  /* buttons nudge up on hover (they already scale on :active) */
+  .inh-btn:hover { filter: brightness(1.04); transform: translateY(-1px); }
+
+  /* chips + pills */
+  .inh-chip { transition: background .15s ease, color .15s ease, transform .12s ease; }
+  .inh-chip:hover { background: var(--surface-2); }
+  .inh-chip:active { transform: scale(.96); }
+  .inh-pill { transition: transform .15s ease; }
+
+  /* photo tiles zoom a touch on hover */
+  .inh-photo { transition: transform .28s cubic-bezier(.2,.7,.3,1), box-shadow .22s ease; }
+  .inh-photo:hover { transform: scale(1.02); box-shadow: var(--shadow-md); }
+
+  /* nav + avatar micro-interactions */
+  .inh-navitem { transition: background .14s ease, color .14s ease, transform .12s ease; }
+  .inh-navitem:active { transform: scale(.98); }
+  .inh-tab__ico { transition: transform .16s ease; }
+  .inh-tab.active .inh-tab__ico { transform: translateY(-2px); }
+  .inh-avatar { transition: transform .16s ease; }
+  .inh-avatar:hover { transform: scale(1.06); }
+
+  /* clickable rows highlight smoothly */
+  .inh-row { transition: background .14s ease; }
+
+  /* icon buttons */
+  .inh-iconbtn { transition: background .14s ease, transform .12s ease; }
+  .inh-iconbtn:active { transform: scale(.92); }
+}
+
+/* respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
