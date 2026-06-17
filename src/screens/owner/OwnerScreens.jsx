@@ -216,7 +216,8 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
           <div className="inh-card" style={{ overflow: 'hidden' }}>
             {payments.length === 0 && <div style={{ padding: 16 }}><div className="inh-row__sub">No payments yet.</div></div>}
             {payments.map(p => (
-              <div key={p.id} style={{ padding: 16, borderTop: '1px solid var(--border)' }} className="pay-block">
+              <div key={p.id} style={{ padding: 16, borderTop: '1px solid var(--border)', cursor: onEdit ? 'pointer' : 'default' }} className="pay-block"
+                onClick={onEdit ? () => setForm({ pay: p }) : undefined}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div className="inh-row__ico" style={{ marginTop: 2 }}><Icon name="hard-hat" size={20} /></div>
                   <div style={{ flex: 1 }}>
@@ -224,13 +225,9 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                       <div className="inh-row__title">{p.contractor}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div className="inh-figure" style={{ fontSize: 15 }}>{rm(p.amount)}</div>
-                        {onEdit && (
-                          <button onClick={() => setForm({ pay: p })} aria-label="Edit payment" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
-                            <Icon name="pencil" size={14} color="var(--fg-3)" />
-                          </button>
-                        )}
+                        {onEdit && <Icon name="pencil" size={13} color="var(--fg-3)" />}
                         {onDelete && (
-                          <button onClick={() => setDel(p)} aria-label="Delete payment" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                          <button onClick={(e) => { e.stopPropagation(); setDel(p); }} aria-label="Delete payment" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
                             <Icon name="trash" size={14} color="var(--fg-3)" />
                           </button>
                         )}
@@ -243,8 +240,8 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                     </div>
                     {(p.status === 'pending' || p.status === 'overdue' || p.status === 'hold') && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <Btn variant="charcoal" size="sm" icon="check" onClick={() => setConfirm({ pay: p, action: 'release' })}>Approve &amp; release</Btn>
-                        {p.status !== 'hold' && <Btn variant="ghost" size="sm" icon="pause" onClick={() => setConfirm({ pay: p, action: 'hold' })}>Hold</Btn>}
+                        <Btn variant="charcoal" size="sm" icon="check" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'release' }); }}>Approve &amp; release</Btn>
+                        {p.status !== 'hold' && <Btn variant="ghost" size="sm" icon="pause" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'hold' }); }}>Hold</Btn>}
                       </div>
                     )}
                   </div>
