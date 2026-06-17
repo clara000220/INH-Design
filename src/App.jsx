@@ -866,9 +866,10 @@ export default function App() {
     const r = await Promise.allSettled([
       api.listPhases(projectId), api.listSchedule(projectId), api.listUpdates(projectId),
       api.listDocuments(projectId), api.listPayments(projectId), api.listMembers(projectId),
+      api.listStatusNotes(projectId),
     ]);
-    const [phases, schedule, updates, documents, payments, members] = r.map(x => (x.status === 'fulfilled' ? x.value : []));
-    setDetail({ projectId, phases, schedule, updates, documents, payments, members });
+    const [phases, schedule, updates, documents, payments, members, notes] = r.map(x => (x.status === 'fulfilled' ? x.value : []));
+    setDetail({ projectId, phases, schedule, updates, documents, payments, members, notes });
   };
 
   // After an item changes, recompute the project's overall progress from item
@@ -1140,6 +1141,12 @@ export default function App() {
     },
   });
 
+  const handleAddNote = async (body) => {
+    if (!IS_LIVE || !body.trim()) return;
+    await api.addStatusNote(activeProjectId, body.trim());
+    await loadDetail(activeProjectId);
+  };
+
   const handleSetStage = async (stage) => {
     const id = activeProject?.id;
     if (!id) return;
@@ -1147,8 +1154,8 @@ export default function App() {
     setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, stage, stage_dates } } : e)));
     setProjects(ps => ps.map(p => (p.id === id ? { ...p, stage, stage_dates } : p)));
     if (!IS_LIVE) return;
-    await api.updateProject(id, { stage, stage_dates });
-    await reloadTop();
+    try { await api.updateProject(id, { stage, stage_dates }); await reloadTop(); }
+    catch (e) { /* keep optimistic UI even if the column isn't migrated yet */ }
   };
 
   const handleUpdateProgress = async (id, progress) => {
@@ -1368,6 +1375,7 @@ export default function App() {
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
+          notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1419,6 +1427,7 @@ export default function App() {
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
+          notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}

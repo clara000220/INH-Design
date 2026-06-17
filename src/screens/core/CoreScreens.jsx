@@ -48,8 +48,9 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
+  const [noteDraft, setNoteDraft] = useState('');
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
   const [dragItem, setDragItem] = useState(null);     // index of item being dragged (within open phase)
@@ -168,6 +169,42 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             </div>
           );
         })()}
+
+        {/* Notes & feedback — anyone on the project (incl. homeowner) can post */}
+        {(onAddNote || (notes && notes.length > 0)) && (
+          <div>
+            <div className="inh-section">Notes &amp; feedback</div>
+            <div className="inh-card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {(notes || []).length === 0 && (
+                <p className="body-2" style={{ margin: 0 }}>{role === 'homeowner' ? 'Share feedback or questions for the INH team here.' : 'Notes here are visible to the client too.'}</p>
+              )}
+              {(notes || []).map((n, i) => (
+                <div key={n.id || i} style={{ borderTop: i ? '1px solid var(--border)' : 'none', paddingTop: i ? 12 : 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{n.author}</span>
+                    <span className="inh-chip" style={{ padding: '2px 8px', fontSize: 10.5, textTransform: 'capitalize' }}>{n.role}</span>
+                    <span className="meta">{n.at ? new Date(n.at).toLocaleString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                  </div>
+                  <div className="body-2" style={{ marginTop: 3, color: 'var(--fg-1)' }}>{n.body}</div>
+                </div>
+              ))}
+              {onAddNote && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="inh-input" style={{ flex: 1 }}>
+                    <span className="lead"><Icon name="message-circle" size={17} /></span>
+                    <input value={noteDraft} placeholder={role === 'homeowner' ? 'Add your feedback…' : 'Add a note…'}
+                      onChange={e => setNoteDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && noteDraft.trim()) { e.preventDefault(); onAddNote(noteDraft.trim()); setNoteDraft(''); } }} />
+                  </div>
+                  <button onClick={() => { if (noteDraft.trim()) { onAddNote(noteDraft.trim()); setNoteDraft(''); } }} disabled={!noteDraft.trim()}
+                    style={{ flexShrink: 0, padding: '0 16px', borderRadius: 12, border: 'none', background: noteDraft.trim() ? 'var(--inh-lime)' : 'var(--surface-2)', color: 'var(--inh-charcoal)', fontWeight: 700, fontSize: 13.5, cursor: noteDraft.trim() ? 'pointer' : 'default' }}>
+                    Post
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {onReport && (
           <button onClick={onReport}

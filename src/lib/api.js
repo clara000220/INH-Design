@@ -534,6 +534,20 @@ export async function listHomeowners() {
   return (data || []).map(u => ({ id: u.id, name: u.full_name, initials: u.initials || initialsOf(u.full_name) }));
 }
 
+// Notes & feedback thread on a project's client status (members + homeowner).
+export async function listStatusNotes(projectId) {
+  const { data, error } = await supabase.from('status_notes')
+    .select('id, body, created_at, author:author_id(full_name, role)')
+    .eq('project_id', projectId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(n => ({ id: n.id, body: n.body, at: n.created_at, author: n.author?.full_name || 'Someone', role: n.author?.role || 'homeowner' }));
+}
+
+export async function addStatusNote(projectId, body) {
+  const { error } = await supabase.from('status_notes').insert({ project_id: projectId, body: String(body).trim() });
+  if (error) throw error;
+}
+
 // Owner-only: the project ids a user is assigned to (for the Users screen).
 export async function listUserProjects(userId) {
   const { data, error } = await supabase.from('project_members')
