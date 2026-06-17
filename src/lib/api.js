@@ -3,6 +3,7 @@
    decides what each role can actually read/write; these calls just ask. */
 import { supabase } from './supabase.js';
 import { compressImage } from './image.js';
+import { DEFAULT_TEMPLATE } from './template.js';
 
 /* ----------------------------- formatting ----------------------------- */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -53,6 +54,23 @@ export async function createProject({ name, code, address, type, est_handover })
     .select().single();
   if (error) throw error;
   return data;
+}
+
+// The owner-customised default project item template (or the built-in default).
+export async function getProjectTemplate() {
+  try {
+    const { data } = await supabase.from('app_settings').select('project_template').eq('id', 1).maybeSingle();
+    const tpl = data?.project_template;
+    if (Array.isArray(tpl) && tpl.length) return tpl;
+  } catch (e) { /* table may not exist yet → fall back */ }
+  return DEFAULT_TEMPLATE;
+}
+
+// Owner-only: save the default project item template.
+export async function saveProjectTemplate(template) {
+  const { error } = await supabase.from('app_settings')
+    .upsert({ id: 1, project_template: template, updated_at: new Date().toISOString() });
+  if (error) throw error;
 }
 
 export async function updateProjectProgress(id, progress) {

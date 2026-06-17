@@ -4,6 +4,7 @@ import { Icon } from './components/Icon.jsx';
 import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet, Dialog } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE, normalizeLogin } from './lib/supabase.js';
+import { DEFAULT_TEMPLATE } from './lib/template.js';
 import * as api from './lib/api.js';
 import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
@@ -405,9 +406,19 @@ function EditProjectSheet({ project, onClose, onSave }) {
   );
 }
 
-function SettingsSheet({ lang, onChangeLang, onClose }) {
+function SettingsSheet({ lang, onChangeLang, onClose, onEditTemplate }) {
   return (
     <Sheet title={t('Settings & language')} onClose={onClose}>
+      {onEditTemplate && (
+        <>
+          <label className="inh-label">Default project items</label>
+          <button onClick={onEditTemplate} className="inh-row" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: 16 }}>
+            <div className="inh-row__ico" style={{ background: 'var(--inh-lime-tint)' }}><Icon name="briefcase" size={19} color="var(--inh-charcoal)" /></div>
+            <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5 }}>Edit add-project checklist</div><div className="inh-row__sub">The phases & items shown when adding a project</div></div>
+            <Icon name="chevron-right" size={17} color="var(--fg-3)" />
+          </button>
+        </>
+      )}
       <label className="inh-label">{t('Language')}</label>
       <p className="body-2" style={{ marginBottom: 14 }}>{t('Choose the language for the app.')}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -444,31 +455,142 @@ function SupportSheet({ onClose }) {
   );
 }
 
-function AddProjectSheet({ onClose, onSave, suggestedCode }) {
+function AddProjectSheet({ onClose, onCreate, onAddItems, suggestedCode, template = [] }) {
+  const [step, setStep] = useState(1);
   const [f, setF] = useState({ name: '', code: suggestedCode || '', address: '', type: '', est_handover: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [created, setCreated] = useState(null);
+  const [sel, setSel] = useState([]);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
-  const ready = f.name.trim() && f.code.trim();   // code is auto-filled, so always present
-  const save = async () => {
+  const ready = f.name.trim() && f.code.trim();
+
+  const continueToItems = async () => {
     if (!ready) return;
     setBusy(true); setErr(null);
-    try { await onSave(f); onClose(); }
-    catch (e) { setErr(e?.message || 'Could not create project'); }
+    try {
+      const proj = await onCreate({ name: f.name.trim(), code: f.code.trim(), address: f.address.trim(), type: f.type.trim(), est_handover: f.est_handover });
+      if (!proj) { onClose(); return; }   // demo mode → no item picker
+      setCreated(proj);
+      setSel((template || []).map(ph => ({ name: ph.name, on: true, tasks: (ph.tasks || []).map(t => ({ title: t, on: true })) })));
+      setStep(2);
+    } catch (e) { setErr(e?.message || 'Could not create project'); }
     finally { setBusy(false); }
   };
+
+  const togglePhase = (i) => setSel(s => s.map((p, idx) => (idx === i ? { ...p, on: !p.on } : p)));
+  const toggleTask = (i, j) => setSel(s => s.map((p, idx) => (idx === i ? { ...p, tasks: p.tasks.map((t, jx) => (jx === j ? { ...t, on: !t.on } : t)) } : p)));
+  const setAll = (on) => setSel(s => s.map(p => ({ ...p, on, tasks: p.tasks.map(t => ({ ...t, on })) })));
+  const chosen = sel.filter(p => p.on).map(p => ({ name: p.name, tasks: p.tasks.filter(t => t.on).map(t => t.title) }));
+
+  const addItems = async () => {
+    setBusy(true); setErr(null);
+    try {
+      if (chosen.length && onAddItems) await onAddItems(created.id, chosen);
+      onClose();
+    } catch (e) { setErr(e?.message || 'Could not add items'); }
+    finally { setBusy(false); }
+  };
+
+  if (step === 2) return (
+    <Sheet title="Add items" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 10 }}>Pick the phases and items to add to <b style={{ color: 'var(--fg-1)' }}>{created?.name}</b>. Untick anything you don't need.</p>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+        <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setAll(true)}>Select all</button>
+        <button className="inh-link" style={{ fontSize: 12.5 }} onClick={() => setAll(false)}>Clear all</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '46vh', overflowY: 'auto' }}>
+        {sel.length === 0 && <p className="body-2">No template items. You can add phases manually on the project.</p>}
+        {sel.map((p, i) => (
+          <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', background: p.on ? 'var(--inh-lime-soft)' : 'transparent' }}>
+            <button onClick={() => togglePhase(i)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 9, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+              <Icon name={p.on ? 'check-circle' : 'circle'} size={19} color={p.on ? 'var(--success)' : 'var(--fg-3)'} stroke={p.on ? 2.2 : 1.8} />
+              <span style={{ flex: 1, fontWeight: 700, fontSize: 14 }}>{p.name}</span>
+            </button>
+            {p.on && p.tasks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 8, paddingLeft: 28 }}>
+                {p.tasks.map((t, j) => (
+                  <button key={j} onClick={() => toggleTask(i, j)} style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: '3px 0' }}>
+                    <Icon name={t.on ? 'check-circle' : 'circle'} size={15} color={t.on ? 'var(--success)' : 'var(--fg-3)'} stroke={t.on ? 2.2 : 1.8} />
+                    <span style={{ fontSize: 13, color: t.on ? 'var(--fg-1)' : 'var(--fg-3)' }}>{t.title}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <Btn variant="ghost" onClick={onClose} disabled={busy}>Skip</Btn>
+        <Btn variant="primary" icon="plus" onClick={addItems} disabled={busy}>{busy ? 'Adding…' : `Add ${chosen.length} phase${chosen.length === 1 ? '' : 's'}`}</Btn>
+      </div>
+    </Sheet>
+  );
+
   return (
     <Sheet title="Add project" onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Project name" icon="building" value={f.name} onChange={set('name')} placeholder="e.g. Lot 23, Bukit Indah" autoFocus />
-        <Field label="Project code" icon="briefcase" value={f.code} onChange={set('code')} placeholder="e.g. P-2026-045" />
+        <Field label="Project code (auto)" icon="briefcase" value={f.code} onChange={set('code')} placeholder="e.g. P-2026-045" />
         <Field label="Address" icon="map-pin" value={f.address} onChange={set('address')} placeholder="Site address" />
         <Field label="Type" icon="home" value={f.type} onChange={set('type')} placeholder="e.g. Full home renovation" />
         <Field label="Est. handover" icon="calendar" type="date" value={f.est_handover} onChange={set('est_handover')} placeholder="" />
       </div>
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
-      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="plus" onClick={save} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create project'}</Btn></div>
+      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="arrow-right" onClick={continueToItems} disabled={busy || !ready}>{busy ? 'Creating…' : 'Create & choose items'}</Btn></div>
     </Sheet>
+  );
+}
+
+/* Owner editor for the default add-project item template. */
+function TemplateScreen({ template, onSave }) {
+  const [tpl, setTpl] = useState(() => (template || []).map(p => ({ name: p.name, tasks: [...(p.tasks || [])] })));
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState(null);
+  const setPhaseName = (i, v) => setTpl(s => s.map((p, idx) => (idx === i ? { ...p, name: v } : p)));
+  const removePhase = (i) => setTpl(s => s.filter((_, idx) => idx !== i));
+  const addPhase = () => setTpl(s => [...s, { name: '', tasks: [] }]);
+  const setTask = (i, j, v) => setTpl(s => s.map((p, idx) => (idx === i ? { ...p, tasks: p.tasks.map((t, jx) => (jx === j ? v : t)) } : p)));
+  const removeTask = (i, j) => setTpl(s => s.map((p, idx) => (idx === i ? { ...p, tasks: p.tasks.filter((_, jx) => jx !== j) } : p)));
+  const addTask = (i) => setTpl(s => s.map((p, idx) => (idx === i ? { ...p, tasks: [...p.tasks, ''] } : p)));
+  const save = async () => {
+    setBusy(true); setErr(null); setSaved(false);
+    const clean = tpl.map(p => ({ name: (p.name || '').trim(), tasks: p.tasks.map(t => (t || '').trim()).filter(Boolean) })).filter(p => p.name);
+    try { await onSave(clean); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    catch (e) { setErr(e?.message || 'Could not save'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="inh-scroll"><div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <p className="body-2">These phases and items appear (as a checklist) when you add a project, so you can pick them instead of typing each one.</p>
+      {tpl.map((p, i) => (
+        <div key={i} className="inh-card" style={{ padding: 14 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input value={p.name} onChange={e => setPhaseName(i, e.target.value)} placeholder="Phase name"
+              style={{ flex: 1, border: '1px solid var(--border-strong)', borderRadius: 10, padding: '9px 11px', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+            <button onClick={() => removePhase(i)} aria-label="Remove phase" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 4 }}><Icon name="trash" size={16} color="var(--error)" /></button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+            {p.tasks.map((t, j) => (
+              <div key={j} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Icon name="circle" size={13} color="var(--fg-3)" />
+                <input value={t} onChange={e => setTask(i, j, e.target.value)} placeholder="Item…"
+                  style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+                <button onClick={() => removeTask(i, j)} aria-label="Remove item" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>
+              </div>
+            ))}
+            <button onClick={() => addTask(i)} className="inh-link" style={{ fontSize: 12.5, alignSelf: 'flex-start', marginTop: 2 }}>+ Add item</button>
+          </div>
+        </div>
+      ))}
+      <button onClick={addPhase} style={{ border: '1.5px dashed var(--border-strong)', borderRadius: 12, padding: '12px', background: 'transparent', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <Icon name="plus" size={16} color="var(--fg-2)" /> Add phase
+      </button>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5 }}>{err}</p>}
+      <Btn variant="primary" icon="check" onClick={save} disabled={busy}>{busy ? 'Saving…' : saved ? 'Saved' : 'Save default items'}</Btn>
+    </div></div>
   );
 }
 
@@ -664,6 +786,7 @@ export default function App() {
   const changeLang = (code) => { setLang(code); setLangState(code); };
   const [feedProjectId, setFeedProjectId] = useState(null);   // which project the owner views on Updates/Documents
   const [storageBytes, setStorageBytes] = useState(0);
+  const [template, setTemplate] = useState(DEFAULT_TEMPLATE);   // default add-project items
 
   // data
   const [projects, setProjects] = useState(IS_LIVE ? [] : INH_DATA.projects);
@@ -725,13 +848,14 @@ export default function App() {
     const r = await Promise.allSettled([
       api.listProjects(), api.getMyProfile(), api.listUsers(),
       api.listHomeowners(), api.listProjectFees(), api.listAudit(), api.listCredentials(),
-      api.getStorageUsage(),
+      api.getStorageUsage(), api.getProjectTemplate(),
     ]);
-    const [p, pr, us, ho, fe, au, cr, sb] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    const [p, pr, us, ho, fe, au, cr, sb, tpl] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
     if (p) setProjects(p);
     if (pr) setProfile(pr);
     if (us) setUsers(cr ? us.map(u => ({ ...u, ...(cr[u.id] || {}) })) : us);
     if (sb != null) setStorageBytes(sb);
+    if (tpl && tpl.length) setTemplate(tpl);
     if (ho) setHomeowners(ho);
     if (fe) setFees(fe);
     if (au) setAudit(au);
@@ -905,14 +1029,32 @@ export default function App() {
 
   const handleAddProject = async (form) => {
     if (!IS_LIVE) {
-      setProjects(ps => [...ps, {
-        id: 'p' + (ps.length + 1), name: form.name, code: form.code, address: form.address,
+      const demo = {
+        id: 'p' + (projects.length + 1), name: form.name, code: form.code, address: form.address,
         type: form.type, progress: 0, status: 'pending', committed: 0, released: 0, pending: 0, releasedPct: 0,
-      }]);
-      return;
+      };
+      setProjects(ps => [...ps, demo]);
+      return null;   // demo: skip the item picker
     }
-    await api.createProject(form);
+    const proj = await api.createProject(form);
     await reloadTop();
+    return proj;
+  };
+
+  // Add the chosen template phases (with their items) to a freshly-created project.
+  const handleAddProjectItems = async (projectId, phases) => {
+    if (!IS_LIVE) return;
+    for (const ph of phases) {
+      await api.addPhase(projectId, { name: ph.name, status: 'upcoming', pct: 0, tasks: ph.tasks });
+    }
+    await reloadTop();
+  };
+
+  // Owner-only: save the editable default item template.
+  const handleSaveTemplate = async (tpl) => {
+    setTemplate(tpl);
+    if (!IS_LIVE) return;
+    await api.saveProjectTemplate(tpl);
   };
 
   // Build a printable project report (progress detail + photos) and open it
@@ -1184,6 +1326,7 @@ export default function App() {
         feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project?.name, back: pop },
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
         plan:       { eyebrow: 'Owner tools', title: 'Plan & storage', back: pop },
+        template:   { eyebrow: 'Settings', title: 'Default items', back: pop },
         team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
         documents:  { eyebrow: top.project?.name, title: 'Documents', back: pop },
       }[top.type];
@@ -1231,6 +1374,8 @@ export default function App() {
           onSetStatus={handleSetPayment} onAdd={handleAddPayment} onEdit={handleEditPayment} onDelete={handleDeletePayment} />;
       if (top.type === 'plan')
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
+      if (top.type === 'template')
+        return <TemplateScreen template={template} onSave={handleSaveTemplate} />;
       if (top.type === 'users')
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null}
@@ -1312,9 +1457,10 @@ export default function App() {
       {sheet === 'property' && <PropertySheet role={role} projects={projects} selectedId={currentProject?.id} onSelect={setFeedProjectId} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
-      {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)} />}
+      {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)}
+        onEditTemplate={role === 'owner' ? () => { setSheet(null); push({ type: 'template' }); } : null} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
-      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onSave={handleAddProject} suggestedCode={nextProjectCode} />}
+      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onCreate={handleAddProject} onAddItems={handleAddProjectItems} suggestedCode={nextProjectCode} template={template} />}
       {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}
