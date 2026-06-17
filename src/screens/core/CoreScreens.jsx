@@ -37,7 +37,7 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage }) {
   const [open, setOpen] = useState(2);
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
@@ -116,6 +116,35 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             )
           )}
         </div>
+
+        {/* Client status — high-level stage pipeline (admin updates, all can see) */}
+        {(() => {
+          const STAGES = [['measure', 'Measure'], ['quotation', 'Quotation'], ['contract', 'Contract'], ['deposit', 'Deposit']];
+          const cur = Math.max(0, STAGES.findIndex(s => s[0] === (project?.stage || 'measure')));
+          const editable = CAN_EDIT(role) && onSetStage;
+          return (
+            <div>
+              <div className="inh-section">Client status</div>
+              <div className="inh-card" style={{ padding: 14 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {STAGES.map(([key, label], i) => {
+                    const done = i < cur, active = i === cur;
+                    return (
+                      <button key={key} onClick={editable ? () => onSetStage(key) : undefined} disabled={!editable}
+                        style={{ flex: 1, border: 'none', background: 'transparent', padding: 0, cursor: editable ? 'pointer' : 'default', textAlign: 'center' }}>
+                        <div style={{ height: 6, borderRadius: 3, background: (done || active) ? 'var(--inh-lime)' : 'var(--surface-2)' }} />
+                        <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, lineHeight: 1.2, color: active ? 'var(--fg-1)' : done ? 'var(--fg-2)' : 'var(--fg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                          {done && <Icon name="check" size={11} color="var(--success)" stroke={3} />}{label}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {editable && <p className="meta" style={{ marginTop: 10 }}>Tap a stage to update the client status.</p>}
+              </div>
+            </div>
+          );
+        })()}
 
         {onReport && (
           <button onClick={onReport}

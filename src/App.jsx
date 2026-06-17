@@ -987,6 +987,16 @@ export default function App() {
     },
   });
 
+  const handleSetStage = async (stage) => {
+    const id = activeProject?.id;
+    if (!id) return;
+    setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, stage } } : e)));
+    setProjects(ps => ps.map(p => (p.id === id ? { ...p, stage } : p)));
+    if (!IS_LIVE) return;
+    await api.updateProject(id, { stage });
+    await reloadTop();
+  };
+
   const handleUpdateProgress = async (id, progress) => {
     if (!IS_LIVE) {
       setProjects(ps => ps.map(p => p.id === id ? { ...p, progress, status: progress >= 100 ? 'ontrack' : p.status } : p));
@@ -1202,6 +1212,7 @@ export default function App() {
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
+          onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1246,6 +1257,7 @@ export default function App() {
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
+          onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}

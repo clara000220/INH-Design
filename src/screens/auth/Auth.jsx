@@ -97,11 +97,12 @@ export function Login({ onSignIn, onForgot, onRegister, live }) {
       <Btn variant="primary" onClick={submit} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
 
       <div style={{ flex: 1 }} />
-      <div style={{ textAlign: 'center', marginTop: 32 }}>
-        <p className="body-2" style={{ marginBottom: 8 }}>
-          New to INH? <button className="inh-link" onClick={onRegister}>Create an account</button>
-        </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '26px 0 14px' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        <span className="meta">New to INH?</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
       </div>
+      <Btn variant="ghost" icon="user-plus" onClick={onRegister}>Create an account</Btn>
     </AuthShell>
   );
 }
