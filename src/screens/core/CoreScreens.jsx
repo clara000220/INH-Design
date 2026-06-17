@@ -6,6 +6,23 @@ import { INH_DATA } from '../../data/data.js';
 
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
+// Pick an emoji for a phase from its name, so phases are easy to scan.
+const PHASE_EMOJI = [
+  [/inspect|defect/, '🔍'], [/design|plan/, '📐'], [/contractor|designer/, '🤝'],
+  [/permit|approval|licen/, '📋'], [/measure/, '📏'], [/protect/, '🛡️'],
+  [/electric|wiring/, '⚡'], [/air.?con|cooling|aircond/, '❄️'],
+  [/plumb|water|drain|sink|toilet|sewer/, '🚰'], [/ceiling/, '🪟'], [/paint/, '🎨'],
+  [/carpent|cabinet|built.?in|wardrobe|joinery/, '🪚'], [/light|fixture|lamp|fan/, '💡'],
+  [/furniture|appliance|sofa/, '🛋️'], [/demol|hack|tear|hacking/, '🔨'],
+  [/tile|tiling|floor/, '🧱'], [/kitchen/, '🍽️'], [/clean/, '🧹'], [/door|window/, '🚪'],
+  [/home|setting|setup|handover/, '🏠'], [/roof/, '🏚️'], [/garden|landscap/, '🌿'],
+];
+function phaseEmoji(name) {
+  const n = (name || '').toLowerCase();
+  for (const [re, e] of PHASE_EMOJI) if (re.test(n)) return e;
+  return '🔧';
+}
+
 // "5 days ago" / "today" / "in 3 days" for a YYYY-MM-DD start date.
 function startRel(iso) {
   if (!iso) return '';
@@ -131,7 +148,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
 
         {/* Client status — high-level stage pipeline (admin updates, all can see) */}
         {(() => {
-          const STAGES = [['measure', 'Measure'], ['quotation', 'Quotation'], ['contract', 'Contract'], ['deposit', 'Deposit']];
+          const STAGES = [['measure', '📏 Measure'], ['quotation', '💬 Quotation'], ['contract', '📝 Contract'], ['deposit', '💰 Deposit']];
           const cur = Math.max(0, STAGES.findIndex(s => s[0] === (project?.stage || 'measure')));
           const editable = CAN_EDIT(role) && onSetStage;
           const sd = project?.stage_dates || {};
@@ -311,7 +328,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12 }}>{i + 1}</span>}
                   </div>
                   <div className="inh-row__main">
-                    <div className="inh-row__title" style={{ fontSize: 14.5 }}>{p.name}</div>
+                    <div className="inh-row__title" style={{ fontSize: 14.5 }}><span style={{ marginRight: 6 }}>{phaseEmoji(p.name)}</span>{p.name}</div>
                     <div className="inh-row__sub">{total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates}</div>
                   </div>
                   {editable && onMovePhase && (
