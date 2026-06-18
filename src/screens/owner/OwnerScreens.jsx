@@ -130,11 +130,11 @@ function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
     due_date: pay?.due_date ? String(pay.due_date).slice(0, 10) : '',
     status: canSetStatus ? (pay?.status || 'pending') : 'pending',
   });
-  const [items, setItems] = useState(pay?.items?.length ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '' })) : []);
+  const [items, setItems] = useState(pay?.items?.length ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '', status: it.status || 'pending' })) : []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
-  const addItem = () => setItems(s => [...s, { title: '', amount: '' }]);
+  const addItem = () => setItems(s => [...s, { title: '', amount: '', status: 'pending' }]);
   const setItem = (i, k, v) => setItems(s => s.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeItem = (i) => setItems(s => s.filter((_, idx) => idx !== i));
   const itemsTotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
@@ -142,7 +142,7 @@ function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
   const save = async () => {
     if (!ready) return;
     setBusy(true); setErr(null);
-    const cleanItems = items.map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0 })).filter(it => it.title);
+    const cleanItems = items.map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0, status: it.status || 'pending' })).filter(it => it.title);
     try {
       await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
       onClose();
@@ -217,13 +217,23 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
   useEffect(() => { setPayments(paymentsProp); }, [paymentsProp]);
 
   const act = async () => {
-    const { pay, action } = confirm;
+    const { pay, action, itemIndex } = confirm;
     const status = action === 'release' ? 'released' : 'hold';
     setBusy(true);
     try {
-      if (onSetStatus) await onSetStatus(pay.id, status);
-      setPayments(ps => ps.map(p => p.id === pay.id ? { ...p, status, date: action === 'release' ? 'Released just now' : 'On hold' } : p));
-      setToast(action === 'release' ? `Released ${rm(pay.amount)} to ${pay.contractor}` : `${pay.contractor} put on hold`);
+      if (itemIndex != null) {
+        // release/hold a single sub-item (progress payment)
+        const newItems = (pay.items || []).map((it, i) => (i === itemIndex ? { ...it, status } : it));
+        const allReleased = newItems.length > 0 && newItems.every(it => (it.status || 'pending') === 'released');
+        const patch = allReleased ? { items: newItems, status: 'released' } : { items: newItems };
+        if (onEdit) await onEdit(pay.id, patch);
+        setPayments(ps => ps.map(p => (p.id === pay.id ? { ...p, ...patch } : p)));
+        setToast(action === 'release' ? `Released ${rm(pay.items[itemIndex].amount)} · ${pay.items[itemIndex].title}` : `${pay.items[itemIndex].title} on hold`);
+      } else {
+        if (onSetStatus) await onSetStatus(pay.id, status);
+        setPayments(ps => ps.map(p => (p.id === pay.id ? { ...p, status, date: action === 'release' ? 'Released just now' : 'On hold' } : p)));
+        setToast(action === 'release' ? `Released ${rm(pay.amount)} to ${pay.contractor}` : `${pay.contractor} put on hold`);
+      }
     } catch (e) {
       setToast(e?.message || 'Could not update payment');
     } finally {
@@ -273,19 +283,34 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                     </div>
                     <div className="inh-row__sub">{p.stage}</div>
                     {p.items && p.items.length > 0 && (
-                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {p.items.map((it, ix) => (
-                          <div key={ix} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--fg-2)' }}>
-                            <span>· {it.title}</span><span>{rm(it.amount)}</span>
-                          </div>
-                        ))}
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {p.items.map((it, ix) => {
+                          const st = it.status || 'pending';
+                          return (
+                            <div key={ix} style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingBottom: 6, borderBottom: ix < p.items.length - 1 ? '1px dashed var(--border)' : 'none' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                                <span style={{ color: 'var(--fg-1)' }}>· {it.title}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontWeight: 700 }}>{rm(it.amount)}</span>
+                                  <Pill status={st} />
+                                </div>
+                              </div>
+                              {onSetStatus && (st === 'pending' || st === 'overdue' || st === 'hold') && (
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <Btn variant="charcoal" size="sm" icon="check" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'release', itemIndex: ix }); }}>Release</Btn>
+                                  {st !== 'hold' && <Btn variant="ghost" size="sm" icon="pause" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'hold', itemIndex: ix }); }}>Hold</Btn>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                       <span className="meta">{p.date} · {p.method}</span>
                       <Pill status={p.status} />
                     </div>
-                    {onSetStatus && (p.status === 'pending' || p.status === 'overdue' || p.status === 'hold') && (
+                    {onSetStatus && !(p.items && p.items.length) && (p.status === 'pending' || p.status === 'overdue' || p.status === 'hold') && (
                       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                         <Btn variant="charcoal" size="sm" icon="check" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'release' }); }}>Approve &amp; release</Btn>
                         {p.status !== 'hold' && <Btn variant="ghost" size="sm" icon="pause" onClick={(e) => { e.stopPropagation(); setConfirm({ pay: p, action: 'hold' }); }}>Hold</Btn>}
@@ -331,9 +356,14 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
             {confirm.action === 'release' ? 'Release payment?' : 'Put on hold?'}
           </div>
           <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>
-            {confirm.action === 'release'
-              ? <>You're releasing <b style={{ color: 'var(--fg-1)' }}>{rm(confirm.pay.amount)}</b> to {confirm.pay.contractor}. This is logged and cannot be undone.</>
-              : <>Hold the {rm(confirm.pay.amount)} payment to {confirm.pay.contractor}? You can release it later.</>}
+            {(() => {
+              const isItem = confirm.itemIndex != null;
+              const amt = isItem ? confirm.pay.items[confirm.itemIndex].amount : confirm.pay.amount;
+              const to = isItem ? `${confirm.pay.items[confirm.itemIndex].title} — ${confirm.pay.contractor}` : confirm.pay.contractor;
+              return confirm.action === 'release'
+                ? <>You're releasing <b style={{ color: 'var(--fg-1)' }}>{rm(amt)}</b> to {to}. This is logged and cannot be undone.</>
+                : <>Hold the {rm(amt)} payment to {to}? You can release it later.</>;
+            })()}
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <Btn variant="ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</Btn>
