@@ -65,9 +65,10 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, notes, onAddNote }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
+  const [stageItemDraft, setStageItemDraft] = useState('');
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
   const [dragItem, setDragItem] = useState(null);     // index of item being dragged (within open phase)
@@ -182,6 +183,44 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                   {agoText && <span className="meta">{agoText}</span>}
                   {editable && <span className="meta">Tap a stage to update</span>}
                 </div>
+
+                {/* Sub-item checklist for the current stage */}
+                {(() => {
+                  const curKey = STAGES[cur][0];
+                  const curLabel = STAGES[cur][1].replace(/^\S+\s/, '');
+                  const sItems = (project?.stage_items && project.stage_items[curKey]) || [];
+                  const ed = CAN_EDIT(role) && onUpdateStageItems;
+                  if (!ed && sItems.length === 0) return null;
+                  const toggle = (i) => onUpdateStageItems(curKey, sItems.map((it, idx) => (idx === i ? { ...it, done: !it.done } : it)));
+                  const remove = (i) => onUpdateStageItems(curKey, sItems.filter((_, idx) => idx !== i));
+                  const add = () => { const tx = stageItemDraft.trim(); if (!tx) return; onUpdateStageItems(curKey, [...sItems, { id: `${sItems.length}-${tx.slice(0, 5)}`, title: tx, done: false }]); setStageItemDraft(''); };
+                  return (
+                    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                      <div className="inh-row__sub" style={{ marginBottom: 6, fontWeight: 700 }}>{curLabel} tasks</div>
+                      {sItems.map((it, i) => (
+                        <div key={it.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                          <button onClick={() => ed && toggle(i)} aria-label="Toggle task" style={{ border: 'none', background: 'transparent', padding: 0, cursor: ed ? 'pointer' : 'default', display: 'flex', flexShrink: 0 }}>
+                            <Icon name={it.done ? 'check-circle' : 'circle'} size={17} color={it.done ? 'var(--success)' : 'var(--fg-3)'} stroke={it.done ? 2.2 : 1.8} />
+                          </button>
+                          <span style={{ flex: 1, fontSize: 13, textDecoration: it.done ? 'line-through' : 'none', color: it.done ? 'var(--fg-3)' : 'var(--fg-1)' }}>{it.title}</span>
+                          {ed && <button onClick={() => remove(i)} aria-label="Remove task" style={{ border: 'none', background: 'transparent', padding: 2, cursor: 'pointer', display: 'flex' }}><Icon name="x" size={13} color="var(--fg-3)" /></button>}
+                        </div>
+                      ))}
+                      {sItems.length === 0 && <div className="meta" style={{ padding: '2px 0' }}>No tasks for this stage yet.</div>}
+                      {ed && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                          <div className="inh-input" style={{ flex: 1 }}>
+                            <span className="lead"><Icon name="plus" size={16} /></span>
+                            <input value={stageItemDraft} placeholder={`Add a ${curLabel.toLowerCase()} task…`} onChange={e => setStageItemDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+                          </div>
+                          <button onClick={add} disabled={!stageItemDraft.trim()} aria-label="Add task" style={{ flexShrink: 0, width: 44, borderRadius: 12, border: '1px solid var(--border-strong)', background: 'var(--surface)', cursor: stageItemDraft.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Icon name="plus" size={18} color="var(--fg-1)" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

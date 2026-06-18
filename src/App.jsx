@@ -1156,8 +1156,21 @@ export default function App() {
     setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, stage, stage_dates } } : e)));
     setProjects(ps => ps.map(p => (p.id === id ? { ...p, stage, stage_dates } : p)));
     if (!IS_LIVE) return;
-    try { await api.updateProject(id, { stage, stage_dates }); await reloadTop(); }
-    catch (e) { /* keep optimistic UI even if the column isn't migrated yet */ }
+    // Update stage and stage_dates separately so a missing stage_dates column
+    // doesn't stop the stage itself from saving.
+    try { await api.updateProject(id, { stage }); } catch (e) { /* stage column not migrated */ }
+    try { await api.updateProject(id, { stage_dates }); } catch (e) { /* stage_dates not migrated */ }
+    try { await reloadTop(); } catch (e) { /* ignore */ }
+  };
+
+  const handleUpdateStageItems = async (stage, items) => {
+    const id = activeProject?.id;
+    if (!id) return;
+    const stage_items = { ...(activeProject?.stage_items || {}), [stage]: items };
+    setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, stage_items } } : e)));
+    setProjects(ps => ps.map(p => (p.id === id ? { ...p, stage_items } : p)));
+    if (!IS_LIVE) return;
+    try { await api.updateProject(id, { stage_items }); await reloadTop(); } catch (e) { /* keep optimistic */ }
   };
 
   const handleUpdateProgress = async (id, progress) => {
@@ -1377,6 +1390,7 @@ export default function App() {
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
+          onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
           notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
@@ -1433,6 +1447,7 @@ export default function App() {
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
+          onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
           notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       }
