@@ -1152,7 +1152,7 @@ export default function App() {
   const handleSetStage = async (stage) => {
     const id = activeProject?.id;
     if (!id) return;
-    const stage_dates = { ...(activeProject?.stage_dates || {}), [stage]: todayISO() };
+    const stage_dates = { ...(activeProject?.stage_dates || {}), [stage]: todayISO };
     setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, stage, stage_dates } } : e)));
     setProjects(ps => ps.map(p => (p.id === id ? { ...p, stage, stage_dates } : p)));
     if (!IS_LIVE) return;
