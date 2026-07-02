@@ -1163,6 +1163,15 @@ export default function App() {
     try { await reloadTop(); } catch (e) { /* ignore */ }
   };
 
+  const handleUpdateFinance = async (patch) => {
+    const id = activeProject?.id;
+    if (!id) return;
+    setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, ...patch } } : e)));
+    setProjects(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
+    if (!IS_LIVE) return;
+    try { await api.updateProject(id, patch); await reloadTop(); } catch (e) { /* keep optimistic */ }
+  };
+
   const handleUpdateStageItems = async (stage, items) => {
     const id = activeProject?.id;
     if (!id) return;
@@ -1391,6 +1400,7 @@ export default function App() {
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
+          onUpdateFinance={CAN_EDIT(role) ? handleUpdateFinance : null}
           notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
@@ -1448,6 +1458,7 @@ export default function App() {
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
+          onUpdateFinance={CAN_EDIT(role) ? handleUpdateFinance : null}
           notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
           onOpenTask={t => setTask(t)} />;
       }

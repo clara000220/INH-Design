@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Icon } from '../../components/Icon.jsx';
 import { Pill, ProgressBar } from '../../components/primitives.jsx';
-import { INH_DATA } from '../../data/data.js';
+import { INH_DATA, rm } from '../../data/data.js';
 
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
@@ -65,7 +65,76 @@ export function PhotoTile({ room, tone, isNew, count, thumb, onClick }) {
 }
 
 /* =================== OVERVIEW =================== */
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, notes, onAddNote }) {
+/* Quotation price + payments received (money IN). Staff edit; homeowner reads. */
+function FinanceCard({ project, onUpdateFinance }) {
+  const canEdit = !!onUpdateFinance;
+  const quotation = Number(project?.quotation) || 0;
+  const received = project?.received_payments || [];
+  const totalReceived = received.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const balance = quotation - totalReceived;
+  const [editQuot, setEditQuot] = useState(false);
+  const [quotVal, setQuotVal] = useState(String(quotation || ''));
+  const [rec, setRec] = useState({ amount: '', date: '', note: '' });
+  if (!canEdit && quotation === 0 && received.length === 0) return null;
+
+  const saveQuot = () => { onUpdateFinance({ quotation: Number(quotVal) || 0 }); setEditQuot(false); };
+  const addRec = () => {
+    const amt = Number(rec.amount);
+    if (!amt) return;
+    onUpdateFinance({ received_payments: [...received, { id: `${received.length}-${amt}`, amount: amt, date: rec.date || '', note: (rec.note || '').trim() }] });
+    setRec({ amount: '', date: '', note: '' });
+  };
+  const removeRec = (i) => onUpdateFinance({ received_payments: received.filter((_, idx) => idx !== i) });
+  const fmtDate = (iso) => (iso ? new Date(String(iso).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : '');
+  const inS = { border: '1px solid var(--border-strong)', borderRadius: 10, padding: '8px 11px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' };
+
+  return (
+    <div>
+      <div className="inh-section">Quotation &amp; payments</div>
+      <div className="inh-card" style={{ padding: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <div><div className="meta">Quotation</div><div className="inh-figure" style={{ fontSize: 17 }}>{rm(quotation)}</div></div>
+          <div style={{ textAlign: 'center' }}><div className="meta">Received</div><div className="inh-figure" style={{ fontSize: 17, color: 'var(--success)' }}>{rm(totalReceived)}</div></div>
+          <div style={{ textAlign: 'right' }}><div className="meta">Balance</div><div className="inh-figure" style={{ fontSize: 17, color: balance > 0 ? 'var(--warning)' : 'var(--fg-1)' }}>{rm(balance)}</div></div>
+        </div>
+
+        {canEdit && (editQuot ? (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <input type="number" value={quotVal} onChange={e => setQuotVal(e.target.value)} placeholder="Quotation amount" style={{ ...inS, flex: 1 }} autoFocus />
+            <button onClick={saveQuot} style={{ border: 'none', background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '0 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Save</button>
+          </div>
+        ) : (
+          <button onClick={() => { setQuotVal(String(quotation || '')); setEditQuot(true); }} className="inh-link" style={{ fontSize: 12.5, marginTop: 8 }}>{quotation ? 'Edit quotation' : 'Set quotation'}</button>
+        ))}
+
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <div className="inh-row__sub" style={{ fontWeight: 700, marginBottom: 6 }}>Payments received</div>
+          {received.map((r, i) => (
+            <div key={r.id || i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+              <div>
+                <span style={{ fontSize: 13.5, fontWeight: 700 }}>{rm(Number(r.amount) || 0)}</span>
+                <span className="meta" style={{ marginLeft: 8 }}>{fmtDate(r.date)}{r.note ? ' · ' + r.note : ''}</span>
+              </div>
+              {canEdit && <button onClick={() => removeRec(i)} aria-label="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>}
+            </div>
+          ))}
+          {received.length === 0 && <div className="meta">No payments received yet.</div>}
+        </div>
+
+        {canEdit && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <input type="number" value={rec.amount} onChange={e => setRec(s => ({ ...s, amount: e.target.value }))} placeholder="Amount (RM)" style={{ ...inS, width: 120 }} />
+            <input type="date" value={rec.date} onChange={e => setRec(s => ({ ...s, date: e.target.value }))} style={{ ...inS, width: 150 }} />
+            <input value={rec.note} onChange={e => setRec(s => ({ ...s, note: e.target.value }))} placeholder="Note (e.g. deposit)" style={{ ...inS, flex: 1, minWidth: 120 }} />
+            <button onClick={addRec} disabled={!Number(rec.amount)} style={{ border: 'none', background: Number(rec.amount) ? 'var(--inh-lime)' : 'var(--surface-2)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '0 16px', fontWeight: 700, fontSize: 13, cursor: Number(rec.amount) ? 'pointer' : 'default' }}>Add</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
   const [stageItemDraft, setStageItemDraft] = useState('');
@@ -225,6 +294,8 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             </div>
           );
         })()}
+
+        <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />
 
         {/* Notes & feedback — anyone on the project (incl. homeowner) can post */}
         {(onAddNote || (notes && notes.length > 0)) && (
