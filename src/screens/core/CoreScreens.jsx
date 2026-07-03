@@ -134,6 +134,143 @@ function FinanceCard({ project, onUpdateFinance }) {
   );
 }
 
+/* Notes & feedback thread — homeowner + staff post here. Redesigned so it's
+   obvious where to type, whose message is whose, and that the "Send"
+   button is the primary action. onAddNote may be async and returns
+   { ok, error } — we surface the error inline so posts never silently vanish. */
+function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const list = notes || [];
+  if (!onAddNote && list.length === 0) return null;
+
+  const initialsOf = (name) => {
+    const words = String(name || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    return words.slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
+  };
+  const roleTint = (r) => r === 'homeowner' ? 'var(--inh-lime-tint)' : 'var(--surface-2)';
+  const roleLabel = (r) => r === 'homeowner' ? 'Client' : r === 'admin' ? 'Staff' : r === 'owner' ? 'Owner' : 'Team';
+  const fmtWhen = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const now = new Date();
+    const diff = Math.floor((now - d) / 60000);
+    if (diff < 1) return 'Just now';
+    if (diff < 60) return diff + ' min ago';
+    if (now.toDateString() === d.toDateString()) return d.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const submit = async () => {
+    const text = noteDraft.trim();
+    if (!text || busy) return;
+    setBusy(true); setErr('');
+    // Clear the input immediately so it feels responsive; onAddNote is optimistic.
+    setNoteDraft('');
+    const res = await Promise.resolve(onAddNote(text));
+    if (res && res.ok === false) {
+      setErr(res.error || 'Could not save. Please try again.');
+      setNoteDraft(text);   // restore what they typed
+    }
+    setBusy(false);
+  };
+
+  const canSend = onAddNote && noteDraft.trim() && !busy;
+
+  return (
+    <div>
+      <div className="inh-section" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="message-circle" size={14} color="var(--fg-2)" />
+        <span>Notes &amp; feedback</span>
+        {list.length > 0 && (
+          <span style={{ background: 'var(--surface-2)', color: 'var(--fg-2)', fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 999, letterSpacing: 0 }}>{list.length}</span>
+        )}
+      </div>
+      <div className="inh-card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Message list */}
+        <div style={{ padding: list.length ? '14px 14px 4px' : '18px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {list.length === 0 && (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ width: 34, height: 34, borderRadius: 999, background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name="message-circle" size={17} color="var(--inh-charcoal)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--fg-1)' }}>
+                  {role === 'homeowner' ? 'Send your first note to INH' : 'No messages yet'}
+                </div>
+                <div className="inh-row__sub" style={{ marginTop: 2 }}>
+                  {role === 'homeowner'
+                    ? 'Anything you type below will be sent to INH. Use this for questions, feedback, or approvals.'
+                    : 'Anything you type below is also visible to the client. Use it for quick updates or replies to feedback.'}
+                </div>
+              </div>
+            </div>
+          )}
+          {list.map((n, i) => {
+            const mine = n.role === role;
+            return (
+              <div key={n.id || i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 999, background: roleTint(n.role), color: 'var(--inh-charcoal)', fontWeight: 800, fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {initialsOf(n.author)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--fg-1)' }}>{n.author || 'Someone'}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: roleTint(n.role), color: 'var(--inh-charcoal)' }}>{roleLabel(n.role)}</span>
+                    {mine && <span className="meta" style={{ fontSize: 10.5 }}>You</span>}
+                    <span className="meta" style={{ fontSize: 11 }}>{fmtWhen(n.at)}</span>
+                  </div>
+                  <div style={{ marginTop: 4, padding: '8px 11px', background: mine ? 'var(--inh-lime-tint)' : 'var(--surface-2)', borderRadius: 12, color: 'var(--fg-1)', fontSize: 13.5, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
+                    {n.body}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Composer — clearly separated, wide input, prominent Send button */}
+        {onAddNote && (
+          <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)', padding: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 12, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--fg-3)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+                  {role === 'homeowner' ? 'Message INH' : 'Reply to the client'}
+                </div>
+                <textarea
+                  value={noteDraft}
+                  placeholder={role === 'homeowner' ? 'Type your question or feedback…' : 'Type a note the client will also see…'}
+                  onChange={e => setNoteDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
+                  rows={2}
+                  style={{ border: 'none', outline: 'none', background: 'transparent', resize: 'none', fontFamily: 'inherit', fontSize: 14, color: 'var(--fg-1)', width: '100%', padding: 0 }}
+                />
+              </div>
+              <button onClick={submit} disabled={!canSend} aria-label="Send message"
+                style={{ flexShrink: 0, height: 48, minWidth: 76, borderRadius: 12, border: 'none', background: canSend ? 'var(--inh-lime)' : 'var(--border)', color: 'var(--inh-charcoal)', fontWeight: 800, fontSize: 13.5, cursor: canSend ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                {busy ? '…' : <><Icon name="send" size={16} color="var(--inh-charcoal)" />Send</>}
+              </button>
+            </div>
+            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className="meta" style={{ fontSize: 11 }}>
+                {role === 'homeowner' ? '👀 INH will see this immediately' : '👀 The client will see this immediately'}
+              </span>
+              <span className="meta" style={{ fontSize: 11 }}>Press <b>Ctrl+Enter</b> to send</span>
+            </div>
+            {err && (
+              <div style={{ marginTop: 8, padding: '7px 10px', background: '#fdecec', border: '1px solid var(--error)', borderRadius: 8, color: 'var(--error)', fontSize: 12.5, fontWeight: 600 }}>
+                {err}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
@@ -298,40 +435,8 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
         <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />
 
         {/* Notes & feedback — anyone on the project (incl. homeowner) can post */}
-        {(onAddNote || (notes && notes.length > 0)) && (
-          <div>
-            <div className="inh-section">Notes &amp; feedback</div>
-            <div className="inh-card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {(notes || []).length === 0 && (
-                <p className="body-2" style={{ margin: 0 }}>{role === 'homeowner' ? 'Share feedback or questions for the INH team here.' : 'Notes here are visible to the client too.'}</p>
-              )}
-              {(notes || []).map((n, i) => (
-                <div key={n.id || i} style={{ borderTop: i ? '1px solid var(--border)' : 'none', paddingTop: i ? 12 : 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>{n.author}</span>
-                    <span className="inh-chip" style={{ padding: '2px 8px', fontSize: 10.5, textTransform: 'capitalize' }}>{n.role}</span>
-                    <span className="meta">{n.at ? new Date(n.at).toLocaleString('en-MY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                  </div>
-                  <div className="body-2" style={{ marginTop: 3, color: 'var(--fg-1)' }}>{n.body}</div>
-                </div>
-              ))}
-              {onAddNote && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div className="inh-input" style={{ flex: 1 }}>
-                    <span className="lead"><Icon name="message-circle" size={17} /></span>
-                    <input value={noteDraft} placeholder={role === 'homeowner' ? 'Add your feedback…' : 'Add a note…'}
-                      onChange={e => setNoteDraft(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && noteDraft.trim()) { e.preventDefault(); onAddNote(noteDraft.trim()); setNoteDraft(''); } }} />
-                  </div>
-                  <button onClick={() => { if (noteDraft.trim()) { onAddNote(noteDraft.trim()); setNoteDraft(''); } }} disabled={!noteDraft.trim()}
-                    style={{ flexShrink: 0, padding: '0 16px', borderRadius: 12, border: 'none', background: noteDraft.trim() ? 'var(--inh-lime)' : 'var(--surface-2)', color: 'var(--inh-charcoal)', fontWeight: 700, fontSize: 13.5, cursor: noteDraft.trim() ? 'pointer' : 'default' }}>
-                    Post
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <NotesCard role={role} notes={notes} onAddNote={onAddNote} noteDraft={noteDraft} setNoteDraft={setNoteDraft} />
+
 
         {onReport && (
           <button onClick={onReport}

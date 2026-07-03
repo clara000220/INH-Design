@@ -798,6 +798,7 @@ export default function App() {
   const [fees, setFees] = useState(IS_LIVE ? [] : INH_DATA.projects);
   const [audit, setAudit] = useState(IS_LIVE ? [] : INH_DATA.audit);
   const [detail, setDetail] = useState(null);   // { projectId, phases, schedule, updates, documents, payments, members }
+  const [demoNotes, setDemoNotes] = useState({}); // demo-mode notes by projectId (in memory)
 
   const push = v => setStack(s => [...s, v]);
   const pop = () => setStack(s => s.slice(0, -1));
@@ -1145,9 +1146,37 @@ export default function App() {
   });
 
   const handleAddNote = async (body) => {
-    if (!IS_LIVE || !body.trim()) return;
-    await api.addStatusNote(activeProjectId, body.trim());
-    await loadDetail(activeProjectId);
+    const text = String(body || '').trim();
+    if (!text || !activeProjectId) return { ok: false, error: 'Please type a message.' };
+    if (!IS_LIVE) {
+      // Demo mode: keep the note in memory so the redesigned UI is fully usable.
+      const entry = {
+        id: 'demo-' + Date.now(), body: text, at: new Date().toISOString(),
+        author: profile?.full_name || profile?.name || 'You',
+        role: role || 'owner',
+      };
+      setDemoNotes(m => ({ ...m, [activeProjectId]: [...(m[activeProjectId] || []), entry] }));
+      return { ok: true };
+    }
+    // Optimistic: append the note straight away so the poster sees it land.
+    const optimistic = {
+      id: 'tmp-' + Date.now(), body: text, at: new Date().toISOString(),
+      author: profile?.full_name || profile?.name || 'You',
+      role: profile?.role || role || 'homeowner',
+    };
+    setDetail(d => d && d.projectId === activeProjectId
+      ? { ...d, notes: [...(d.notes || []), optimistic] } : d);
+    try {
+      await api.addStatusNote(activeProjectId, text);
+      // Reload so the server-assigned id and author link replace the temp entry.
+      await loadDetail(activeProjectId);
+      return { ok: true };
+    } catch (e) {
+      // Roll back the optimistic entry and hand the error back to the caller.
+      setDetail(d => d && d.projectId === activeProjectId
+        ? { ...d, notes: (d.notes || []).filter(n => n.id !== optimistic.id) } : d);
+      return { ok: false, error: e?.message || 'Could not save note.' };
+    }
   };
 
   const handleSetStage = async (stage) => {
@@ -1403,7 +1432,8 @@ export default function App() {
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
           onUpdateFinance={CAN_EDIT(role) ? handleUpdateFinance : null}
-          notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
+          notes={IS_LIVE ? (detail?.notes || []) : (demoNotes[activeProjectId] || [])}
+          onAddNote={handleAddNote}
           onOpenTask={t => setTask(t)} />;
       if (top.type === 'feesDetail')
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
@@ -1463,7 +1493,8 @@ export default function App() {
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
           onUpdateFinance={CAN_EDIT(role) ? handleUpdateFinance : null}
-          notes={live(detail?.notes)} onAddNote={IS_LIVE ? handleAddNote : null}
+          notes={IS_LIVE ? (detail?.notes || []) : (demoNotes[activeProjectId] || [])}
+          onAddNote={handleAddNote}
           onOpenTask={t => setTask(t)} />;
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
