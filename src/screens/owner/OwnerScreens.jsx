@@ -803,18 +803,205 @@ export function PlanScreen({ users = [], projects = [], storageBytes = 0 }) {
   );
 }
 
+/* =================== BACKUP & EXPORT (owner only) =================== */
+/* Escape a value for CSV: wrap in quotes if it contains a comma, quote, or
+   newline; double up embedded quotes. Excel opens .csv directly, so this
+   also works as an "Excel file" from the user's perspective. */
+function csvCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCsv(rows) {
+  if (!rows || !rows.length) return '';
+  const cols = Object.keys(rows[0]);
+  const head = cols.map(csvCell).join(',');
+  const body = rows.map(r => cols.map(c => csvCell(r[c])).join(',')).join('\r\n');
+  return head + '\r\n' + body;
+}
+function downloadCsv(name, csv) {
+  // BOM so Excel picks up UTF-8 (Malaysian names / RM symbols stay readable).
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const BACKUP_KEY = 'inh_last_backup_at';
+export function getLastBackupAt() {
+  try { const v = localStorage.getItem(BACKUP_KEY); return v ? new Date(v) : null; } catch { return null; }
+}
+export function setLastBackupAt(when = new Date()) {
+  try { localStorage.setItem(BACKUP_KEY, when.toISOString()); } catch {/* ignore */}
+}
+export function backupIsDue() {
+  const last = getLastBackupAt();
+  if (!last) return true;
+  return (Date.now() - last.getTime()) > 30 * 86400000;
+}
+
+export function BackupScreen({ onExport }) {
+  const [busy, setBusy] = useState(null);   // 'all' | key of one file
+  const [err, setErr] = useState('');
+  const [last, setLast] = useState(getLastBackupAt());
+  const [counts, setCounts] = useState(null);
+
+  const dayDiff = last ? Math.floor((Date.now() - last.getTime()) / 86400000) : null;
+  const overdue = last == null || dayDiff > 30;
+  const lastLabel = !last ? 'Never'
+    : dayDiff === 0 ? 'Today'
+    : dayDiff === 1 ? 'Yesterday'
+    : dayDiff + ' days ago';
+
+  const runExport = async (which) => {
+    if (!onExport) { setErr('Backup is only available when signed in to a live account.'); return; }
+    setBusy(which); setErr('');
+    try {
+      const data = await onExport();
+      const stamp = new Date().toISOString().slice(0, 10);
+      const files = {
+        projects:        ['projects',         toCsv(data.projects)],
+        projectPayments: ['client_payments',  toCsv(data.projectPayments)],
+        updates:         ['updates',          toCsv(data.updates)],
+        documents:       ['documents',        toCsv(data.documents)],
+        fees:            ['fees_contractors', toCsv(data.fees)],
+      };
+      const list = which === 'all' ? Object.keys(files) : [which];
+      for (const k of list) {
+        const [base, csv] = files[k];
+        if (!csv) continue;
+        downloadCsv(`inh-${base}-${stamp}.csv`, csv);
+      }
+      const now = new Date();
+      setLastBackupAt(now); setLast(now);
+      setCounts({
+        projects: data.projects.length, updates: data.updates.length,
+        documents: data.documents.length, fees: data.fees.length,
+        projectPayments: data.projectPayments.length,
+      });
+    } catch (e) {
+      setErr(e?.message || 'Export failed.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const Row = ({ icon, label, sub, k }) => (
+    <div className="inh-row" style={{ cursor: 'default' }}>
+      <div className="inh-row__ico" style={{ background: 'var(--surface-2)' }}>
+        <Icon name={icon} size={18} color="var(--fg-2)" />
+      </div>
+      <div className="inh-row__main">
+        <div className="inh-row__title" style={{ fontSize: 14.5 }}>{label}</div>
+        {sub && <div className="inh-row__sub">{sub}</div>}
+      </div>
+      <button onClick={() => runExport(k)} disabled={!!busy}
+        style={{ border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--fg-1)', borderRadius: 10, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Icon name="download" size={14} />
+        {busy === k ? 'Exporting…' : 'CSV'}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="inh-scroll">
+      <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="inh-hero" style={{ padding: 20 }}>
+          <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>Backup &amp; export</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, color: 'var(--on-dark)', margin: '2px 0 4px' }}>Keep a copy off the server</div>
+          <div style={{ color: 'var(--on-dark-2)', fontSize: 13, lineHeight: 1.45 }}>
+            Download all projects, updates, documents and fees as CSV files. Excel opens them directly. Do this at least once a month so you always have a recent copy.
+          </div>
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 999, background: overdue ? 'var(--warning)' : 'var(--inh-lime)' }} />
+            <div style={{ color: 'var(--on-dark)', fontSize: 13.5, fontWeight: 600 }}>Last backup: {lastLabel}</div>
+          </div>
+        </div>
+
+        {overdue && (
+          <div className="inh-card" style={{ padding: 14, background: 'var(--warning-tint, #fff6e5)', border: '1px solid var(--warning)', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <Icon name="alert-triangle" size={20} color="var(--warning)" />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: 'var(--fg-1)', fontSize: 14 }}>Backup is due</div>
+              <div className="inh-row__sub">
+                {last == null
+                  ? 'You haven’t exported a backup from this device yet. Download one now so no client, invoice, or fee history can be lost.'
+                  : `Your last backup was ${dayDiff} days ago. Please export a fresh copy — the recommended cadence is at least once a month.`}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div className="inh-section">Download all at once</div>
+          <div className="inh-card" style={{ padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14.5 }}>Full backup</div>
+                <div className="inh-row__sub">Projects, client payments, updates, documents and fees — 5 CSV files.</div>
+              </div>
+              <button onClick={() => runExport('all')} disabled={!!busy}
+                style={{ border: 'none', background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 12, padding: '10px 16px', fontSize: 14, fontWeight: 700, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="download" size={16} color="var(--inh-charcoal)" />
+                {busy === 'all' ? 'Exporting…' : 'Download all'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="inh-section">Individual files</div>
+          <div className="inh-card" style={{ overflow: 'hidden' }}>
+            <Row icon="building" label="Projects" sub="Code, name, address, stage, quotation, received total." k="projects" />
+            <Row icon="wallet" label="Client payments" sub="Each payment received against a project quotation." k="projectPayments" />
+            <Row icon="image" label="Updates" sub="Progress-photo entries (metadata only, not the images)." k="updates" />
+            <Row icon="file-text" label="Documents" sub="Contracts, invoices, plans (metadata + storage path)." k="documents" />
+            <Row icon="dollar-sign" label="Fees (contractors)" sub="Money-out records — pending, released and on-hold." k="fees" />
+          </div>
+        </div>
+
+        {counts && !err && (
+          <div className="inh-card" style={{ padding: 12, background: 'var(--success-tint, #e6f6ec)', border: '1px solid var(--success)' }}>
+            <div style={{ fontWeight: 700, color: 'var(--fg-1)', fontSize: 13.5 }}>Backup saved to your Downloads folder</div>
+            <div className="inh-row__sub">
+              {counts.projects} projects · {counts.projectPayments} client payments · {counts.updates} updates · {counts.documents} documents · {counts.fees} fees
+            </div>
+          </div>
+        )}
+        {err && (
+          <div className="inh-card" style={{ padding: 12, background: '#fdecec', border: '1px solid var(--error)' }}>
+            <div style={{ fontWeight: 700, color: 'var(--error)', fontSize: 13.5 }}>{err}</div>
+          </div>
+        )}
+
+        <p className="meta" style={{ textAlign: 'center' }}>
+          Photos and document files stay in Supabase Storage — this backup captures the records that describe them.
+          For the actual image / PDF files, download them from each project.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* =================== MORE =================== */
-export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPlan, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPlan, onBackup, backupDue, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta.person;
   const initials = profile?.initials || meta.initials;
   const Group = ({ children }) => <div className="inh-card" style={{ overflow: 'hidden' }}>{children}</div>;
-  const Item = ({ icon, label, danger, onClick, tint }) => (
+  const Item = ({ icon, label, danger, onClick, tint, dot }) => (
     <div className="inh-row" onClick={onClick}>
       <div className="inh-row__ico" style={{ background: tint || 'var(--surface-2)' }}>
         <Icon name={icon} size={19} color={danger ? 'var(--error)' : tint ? 'var(--inh-charcoal)' : 'var(--fg-2)'} />
       </div>
-      <div className="inh-row__main"><div className="inh-row__title" style={{ fontSize: 14.5, color: danger ? 'var(--error)' : 'var(--fg-1)' }}>{label}</div></div>
+      <div className="inh-row__main">
+        <div className="inh-row__title" style={{ fontSize: 14.5, color: danger ? 'var(--error)' : 'var(--fg-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {label}
+          {dot && <span style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--warning)' }} aria-label="Overdue" />}
+        </div>
+      </div>
       {!danger && <Icon name="chevron-right" size={17} color="var(--fg-3)" />}
     </div>
   );
@@ -837,6 +1024,7 @@ export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPla
               <Item icon="users" label={t('Users')} tint="var(--inh-lime-tint)" onClick={onUsers} />
               <Item icon="shield-check" label={t('Team & Access')} tint="var(--inh-lime-tint)" onClick={onTeam} />
               {onPlan && <Item icon="wallet" label={t('Plan & storage')} tint="var(--inh-lime-tint)" onClick={onPlan} />}
+              {onBackup && <Item icon="download" label={t('Backup & export')} tint="var(--inh-lime-tint)" onClick={onBackup} dot={backupDue} />}
             </Group>
           </div>
         )}

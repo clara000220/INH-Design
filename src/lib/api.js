@@ -228,6 +228,59 @@ export async function updateProject(id, patch = {}) {
   if (error) throw error;
 }
 
+/* ---- Owner backup: pull every project, update, document, and payment ----
+   All queries respect RLS, so this only succeeds for owner accounts. Each
+   returned row includes the project code so the CSVs are joinable in Excel. */
+export async function exportBackup() {
+  const [projRes, updRes, docRes, payRes] = await Promise.all([
+    supabase.from('projects').select('*').order('code'),
+    supabase.from('updates').select('*, projects(code, name)').order('captured_on', { ascending: false }),
+    supabase.from('documents').select('*, projects(code, name)').order('created_at', { ascending: false }),
+    supabase.from('payments').select('*, projects(code, name)').order('created_at', { ascending: false }),
+  ]);
+  const err = [projRes, updRes, docRes, payRes].find(r => r.error);
+  if (err) throw err.error;
+
+  const projects = (projRes.data || []).map(p => ({
+    code: p.code, name: p.name, address: p.address || '', type: p.type || '',
+    status: p.status || '', progress: p.progress ?? '', stage: p.stage || '',
+    est_handover: p.est_handover || '',
+    quotation: p.quotation ?? '',
+    received_total: (p.received_payments || []).reduce((s, r) => s + (Number(r.amount) || 0), 0),
+    received_count: (p.received_payments || []).length,
+    created_at: p.created_at || '',
+  }));
+
+  const projPayments = (projRes.data || []).flatMap(p =>
+    (p.received_payments || []).map(r => ({
+      project_code: p.code, project_name: p.name,
+      amount: Number(r.amount) || 0, date: r.date || '', note: r.note || '',
+    }))
+  );
+
+  const updates = (updRes.data || []).map(u => ({
+    project_code: u.projects?.code || '', project_name: u.projects?.name || '',
+    room: u.room || '', captured_on: u.captured_on || '', is_new: u.is_new ? 'yes' : 'no',
+    created_at: u.created_at || '',
+  }));
+
+  const documents = (docRes.data || []).map(d => ({
+    project_code: d.projects?.code || '', project_name: d.projects?.name || '',
+    name: d.name || '', kind: d.kind || '', file_size_bytes: d.file_size ?? '',
+    issued_on: d.issued_on || '', ready: d.ready ? 'yes' : 'no',
+    storage_path: d.storage_path || '', created_at: d.created_at || '',
+  }));
+
+  const fees = (payRes.data || []).map(p => ({
+    project_code: p.projects?.code || '', project_name: p.projects?.name || '',
+    contractor: p.contractor || '', stage: p.stage || '', amount: Number(p.amount) || 0,
+    method: p.method || '', status: p.status || '', due_date: p.due_date || '',
+    released_at: p.released_at || '', created_at: p.created_at || '',
+  }));
+
+  return { projects, projectPayments: projPayments, updates, documents, fees };
+}
+
 export async function deletePhase(id) {
   const { error } = await supabase.from('phases').delete().eq('id', id);
   if (error) throw error;

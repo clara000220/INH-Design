@@ -11,6 +11,7 @@ import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
   ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen, PlanScreen,
+  BackupScreen, backupIsDue,
 } from './screens/owner/OwnerScreens.jsx';
 
 const initialsOf = (name) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
@@ -1357,6 +1358,7 @@ export default function App() {
         feesDetail: { eyebrow: 'Fees Release · Owner', title: top.project?.name, back: pop },
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
         plan:       { eyebrow: 'Owner tools', title: 'Plan & storage', back: pop },
+        backup:     { eyebrow: 'Owner tools', title: 'Backup & export', back: pop },
         template:   { eyebrow: 'Settings', title: 'Default items', back: pop },
         team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
         documents:  { eyebrow: top.project?.name, title: 'Documents', back: pop },
@@ -1412,6 +1414,8 @@ export default function App() {
           canSetStatus={role === 'owner'} />;
       if (top.type === 'plan')
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
+      if (top.type === 'backup')
+        return <BackupScreen onExport={IS_LIVE ? api.exportBackup : null} />;
       if (top.type === 'template')
         return <TemplateScreen template={template} onSave={handleSaveTemplate} />;
       if (top.type === 'users')
@@ -1475,6 +1479,8 @@ export default function App() {
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
       onAddAccount={IS_LIVE ? () => setSheet('invite') : null}
       onPlan={role === 'owner' ? () => push({ type: 'plan' }) : null}
+      onBackup={role === 'owner' && IS_LIVE ? () => push({ type: 'backup' }) : null}
+      backupDue={role === 'owner' && IS_LIVE ? backupIsDue() : false}
       onSignOut={signOut} onEditName={() => setSheet('editName')}
       onSettings={() => setSheet('settings')} onSupport={() => setSheet('support')}
       onAllProjects={() => { setTab('home'); setStack([]); }}
