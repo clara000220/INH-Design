@@ -6,6 +6,44 @@ import { INH_DATA, rm } from '../../data/data.js';
 
 export const CAN_EDIT = role => role === 'admin' || role === 'owner';
 
+/* Per-section accent palette. Each Overview section has its own tone so
+   the eye can jump between them at a glance: coloured header icon, tinted
+   title, and a matching strip along the top edge of the card. Tones are
+   defined in one place so they stay consistent across the file. */
+const SECTION_TONES = {
+  status:   { fg: '#0284c7', tint: '#e0f2fe', icon: 'shield-check' },   // client status → sky
+  money:    { fg: '#059669', tint: '#d1fae5', icon: 'wallet' },         // quotation & payments → emerald
+  notes:    { fg: '#8a8f00', tint: 'var(--inh-lime-tint)', icon: 'message-circle' }, // notes → lime
+  now:      { fg: '#d97706', tint: '#fef3c7', icon: 'clock' },          // what's happening now → amber
+  week:     { fg: '#6366f1', tint: '#e0e7ff', icon: 'calendar' },       // this week → indigo
+  progress: { fg: '#475569', tint: '#e2e8f0', icon: 'hard-hat' },       // project progress → slate
+};
+
+/* Section heading with a coloured icon chip. Pair with SectionCard so the
+   card gets a matching accent strip on top. */
+function SectionHead({ tone, icon, action, children, style }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 10px', ...style }}>
+      <div className="inh-section" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, color: tone.fg }}>
+        <span style={{ width: 22, height: 22, borderRadius: 7, background: tone.tint, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Icon name={icon || tone.icon} size={13} color={tone.fg} stroke={2.4} />
+        </span>
+        <span>{children}</span>
+      </div>
+      {action}
+    </div>
+  );
+}
+/* A card that carries the section's accent as a thin coloured strip along
+   its top edge. Any extra styles on `style` are merged over the defaults. */
+function SectionCard({ tone, children, style, ...rest }) {
+  return (
+    <div className="inh-card" style={{ borderTop: `3px solid ${tone.fg}`, ...style }} {...rest}>
+      {children}
+    </div>
+  );
+}
+
 // Pick an emoji for a phase from its name, so phases are easy to scan.
 const PHASE_EMOJI = [
   [/inspect|defect/, '🔍'], [/design|plan/, '📐'], [/contractor|designer/, '🤝'],
@@ -90,8 +128,8 @@ function FinanceCard({ project, onUpdateFinance }) {
 
   return (
     <div>
-      <div className="inh-section">Quotation &amp; payments</div>
-      <div className="inh-card" style={{ padding: 14 }}>
+      <SectionHead tone={SECTION_TONES.money}>Quotation &amp; payments</SectionHead>
+      <SectionCard tone={SECTION_TONES.money} style={{ padding: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
           <div><div className="meta">Quotation</div><div className="inh-figure" style={{ fontSize: 17 }}>{rm(quotation)}</div></div>
           <div style={{ textAlign: 'center' }}><div className="meta">Received</div><div className="inh-figure" style={{ fontSize: 17, color: 'var(--success)' }}>{rm(totalReceived)}</div></div>
@@ -129,7 +167,7 @@ function FinanceCard({ project, onUpdateFinance }) {
             <button onClick={addRec} disabled={!Number(rec.amount)} style={{ border: 'none', background: Number(rec.amount) ? 'var(--inh-lime)' : 'var(--surface-2)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '0 16px', fontWeight: 700, fontSize: 13, cursor: Number(rec.amount) ? 'pointer' : 'default' }}>Add</button>
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -179,16 +217,13 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
 
   const canSend = onAddNote && noteDraft.trim() && !busy;
 
+  const tone = SECTION_TONES.notes;
   return (
     <div>
-      <div className="inh-section" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Icon name="message-circle" size={14} color="var(--fg-2)" />
-        <span>Notes &amp; feedback</span>
-        {list.length > 0 && (
-          <span style={{ background: 'var(--surface-2)', color: 'var(--fg-2)', fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 999, letterSpacing: 0 }}>{list.length}</span>
-        )}
-      </div>
-      <div className="inh-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <SectionHead tone={tone} action={list.length > 0 && (
+        <span style={{ background: tone.tint, color: tone.fg, fontSize: 11, fontWeight: 800, padding: '2px 9px', borderRadius: 999 }}>{list.length}</span>
+      )}>Notes &amp; feedback</SectionHead>
+      <SectionCard tone={tone} style={{ padding: 0, overflow: 'hidden' }}>
         {/* Message list */}
         <div style={{ padding: list.length ? '14px 14px 4px' : '18px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {list.length === 0 && (
@@ -266,7 +301,7 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
             )}
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -366,8 +401,8 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           const agoText = days == null ? '' : `Created ${createdStr} · ${days <= 0 ? 'today' : days === 1 ? '1 day ago' : days + ' days ago'}`;
           return (
             <div>
-              <div className="inh-section">Client status</div>
-              <div className="inh-card" style={{ padding: 14 }}>
+              <SectionHead tone={SECTION_TONES.status}>Client status</SectionHead>
+              <SectionCard tone={SECTION_TONES.status} style={{ padding: 14 }}>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {STAGES.map(([key, label], i) => {
                     const done = i < cur, active = i === cur;
@@ -427,7 +462,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     </div>
                   );
                 })()}
-              </div>
+              </SectionCard>
             </div>
           );
         })()}
@@ -451,28 +486,28 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           if (!nowItem) return null;
           return (
             <div>
-              <div className="inh-section">What's happening now</div>
-              <div className="inh-card" style={{ padding: 16, display: 'flex', gap: 13, alignItems: 'center' }}>
-                <div style={{ width: 46, height: 46, borderRadius: 12, background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon name="hard-hat" size={24} color="var(--inh-charcoal)" />
+              <SectionHead tone={SECTION_TONES.now}>What's happening now</SectionHead>
+              <SectionCard tone={SECTION_TONES.now} style={{ padding: 16, display: 'flex', gap: 13, alignItems: 'center' }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: SECTION_TONES.now.tint, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name="hard-hat" size={24} color={SECTION_TONES.now.fg} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{nowItem.title}</div>
                   <div className="body-2" style={{ marginTop: 2 }}>{nowItem.state === 'today' ? 'Scheduled for today' : 'Coming up next'}</div>
                 </div>
                 <Pill status={nowItem.state} />
-              </div>
+              </SectionCard>
             </div>
           );
         })()}
 
         {/* This week */}
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="inh-section" style={{ margin: '4px 0 10px' }}>This week</div>
-            {CAN_EDIT(role) && onAddSchedule && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddSchedule}>+ Add item</button>}
-          </div>
-          <div className="inh-card" style={{ overflow: 'hidden' }}>
+          <SectionHead tone={SECTION_TONES.week}
+            action={CAN_EDIT(role) && onAddSchedule ? <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddSchedule}>+ Add item</button> : null}>
+            This week
+          </SectionHead>
+          <SectionCard tone={SECTION_TONES.week} style={{ overflow: 'hidden' }}>
             {schedule.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">Nothing scheduled yet.</div></div></div>}
             {schedule.map((t, i) => {
               const done = t.state === 'completed';
@@ -511,16 +546,16 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 )}
               </div>
             );})}
-          </div>
+          </SectionCard>
         </div>
 
         {/* Project progress accordion */}
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="inh-section" style={{ margin: '4px 0 10px' }}>Project progress</div>
-            {CAN_EDIT(role) && onAddPhase && <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddPhase}>+ Add phase</button>}
-          </div>
-          <div className="inh-card" style={{ overflow: 'hidden' }}>
+          <SectionHead tone={SECTION_TONES.progress}
+            action={CAN_EDIT(role) && onAddPhase ? <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddPhase}>+ Add phase</button> : null}>
+            Project progress
+          </SectionHead>
+          <SectionCard tone={SECTION_TONES.progress} style={{ overflow: 'hidden' }}>
             {phases.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No phases added yet.</div></div></div>}
             {phases.map((p, i) => {
               const tasks = p.tasks || [];
@@ -672,7 +707,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
               </div>
               );
             })}
-          </div>
+          </SectionCard>
         </div>
       </div>
     </div>
