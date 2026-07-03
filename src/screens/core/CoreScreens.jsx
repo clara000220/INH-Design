@@ -432,7 +432,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           );
         })()}
 
-        <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />
+        {role !== 'homeowner' && <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />}
 
         {/* Notes & feedback — anyone on the project (incl. homeowner) can post */}
         <NotesCard role={role} notes={notes} onAddNote={onAddNote} noteDraft={noteDraft} setNoteDraft={setNoteDraft} />
