@@ -1,5 +1,5 @@
 /* INH — App shell, routing, role switching, live data */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from './components/Icon.jsx';
 import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet, Dialog } from './components/primitives.jsx';
 import { INH_DATA } from './data/data.js';
@@ -840,6 +840,60 @@ export default function App() {
   const push = v => setStack(s => [...s, v]);
   const pop = () => setStack(s => s.slice(0, -1));
   const top = stack[stack.length - 1];
+
+  /* ---- Phone back button → pop the current screen instead of exiting ----
+     We keep a mirror of the app's overlay depth in the browser history.
+     Pressing back on the phone fires `popstate`; we close the topmost open
+     thing (confirm → task → photo → sheet → screen stack → tab). When the
+     app itself closes something via a button we synchronise history so the
+     count stays in step. A sentinel entry is pushed on mount so the very
+     first hardware-back press never leaves the app. */
+  const depth = stack.length + (sheet ? 1 : 0) + (photo ? 1 : 0) + (task ? 1 : 0) + (confirm ? 1 : 0);
+  const prevDepthRef = useRef(0);
+  const syntheticBackRef = useRef(false);
+  const backHandlerRef = useRef(null);
+
+  useEffect(() => {
+    // Sentinel: one spare history entry so the first back press is absorbed.
+    if (typeof window !== 'undefined') window.history.pushState({ inhBase: true }, '');
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const prev = prevDepthRef.current;
+    prevDepthRef.current = depth;
+    if (depth > prev) {
+      // Something opened — push one history entry per newly-opened layer.
+      for (let i = 0; i < depth - prev; i++) window.history.pushState({ inhDepth: prev + i + 1 }, '');
+    } else if (depth < prev) {
+      // Something closed via a normal in-app action — unwind history to match.
+      syntheticBackRef.current = true;
+      window.history.go(-(prev - depth));
+    }
+  }, [depth]);
+
+  // Keep an always-fresh close function so the popstate listener (registered
+  // once) reads the latest state.
+  backHandlerRef.current = () => {
+    if (confirm) { setConfirm(null); return; }
+    if (task) { setTask(null); return; }
+    if (photo) { setPhoto(null); return; }
+    if (sheet) { setSheet(null); return; }
+    if (stack.length) { pop(); return; }
+    // At the root — re-push a sentinel so a further back press has something
+    // to consume; letting it fall through would exit the app.
+    window.history.pushState({ inhBase: true }, '');
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      if (syntheticBackRef.current) { syntheticBackRef.current = false; return; }
+      backHandlerRef.current && backHandlerRef.current();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const currentProject = projects.find(p => p.id === feedProjectId) || projects[0];
   const baseProject = top?.project || currentProject;
