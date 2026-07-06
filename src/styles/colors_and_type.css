@@ -19,8 +19,8 @@
   --inh-lime:        #D8D80A;  /* primary accent — fills only, never small text */
   --inh-lime-tint:   #F4F4C2;  /* soft selected rows, pills, banners */
   --inh-charcoal:    #2A2523;  /* primary dark — text, dark hero cards */
-  --inh-charcoal-80: #4A4543;  /* secondary text, icons */
-  --inh-grey:        #8B8A88;  /* tertiary text, metadata, dividers, tagline */
+  --inh-charcoal-80: #3F3937;  /* secondary text, icons — bumped darker for readability */
+  --inh-grey:        #6D6B69;  /* tertiary text, metadata — bumped darker for readability */
   --surface-white:   #FFFFFF;  /* cards, sheets, list rows */
   --canvas:          #F7F7F4;  /* warm off-white app background */
 
@@ -63,10 +63,10 @@
   --text-h1:      26px;  /* screen titles */
   --text-h2:      20px;  /* section headers */
   --text-h3:      17px;  /* card titles, list headers */
-  --text-body:    15px;  /* default body / list items */
-  --text-sm:      13px;  /* secondary copy */
-  --text-meta:    12px;  /* metadata, captions */
-  --text-eyebrow: 11px;  /* uppercase letter-spaced labels */
+  --text-body:    15.5px;/* default body / list items */
+  --text-sm:      13.5px;/* secondary copy */
+  --text-meta:    12.5px;/* metadata, captions */
+  --text-eyebrow: 12.5px;/* uppercase letter-spaced labels */
 
   /* ---------- Radii ---------- */
   --r-xs: 6px;

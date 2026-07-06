@@ -245,13 +245,13 @@
   background: var(--surface-2); display: flex; align-items: center; justify-content: center; color: var(--fg-2);
 }
 .inh-row__main { flex: 1; min-width: 0; }
-.inh-row__title { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--fg-1); }
-.inh-row__sub { font-size: 12.5px; color: var(--fg-3); margin-top: 1px; }
+.inh-row__title { font-family: var(--font-display); font-weight: 700; font-size: 15.5px; color: var(--fg-1); line-height: 1.25; }
+.inh-row__sub { font-size: 13px; color: var(--fg-2); margin-top: 2px; line-height: 1.35; }
 .inh-row__trail { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 .inh-figure { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* section label */
-.inh-section { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin: 4px 0 10px; }
+.inh-section { font-size: 12.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-2); margin: 4px 0 10px; }
 
 /* ---------- Sheet / scrim ---------- */
 .inh-scrim {

@@ -577,35 +577,24 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     {isDone ? <Icon name="check" size={15} stroke={3} /> :
                       <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 12 }}>{i + 1}</span>}
                   </div>
-                  <div className="inh-row__main">
-                    <div className="inh-row__title" style={{ fontSize: 14.5 }}><span style={{ marginRight: 6 }}>{phaseEmoji(p.name)}</span>{p.name}</div>
+                  <div className="inh-row__main" style={{ minWidth: 0 }}>
+                    <div className="inh-row__title" style={{ fontSize: 16 }}><span style={{ marginRight: 6 }}>{phaseEmoji(p.name)}</span>{p.name}</div>
                     <div className="inh-row__sub">{total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates}</div>
                   </div>
                   {editable && onMovePhase && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 1, marginRight: 2 }} onClick={e => e.stopPropagation()}>
-                      <span draggable onDragStart={() => setDragPhase(i)} onDragEnd={() => setDragPhase(null)} title="Drag to reorder" aria-label="Drag to reorder"
-                        style={{ cursor: 'grab', display: 'flex', padding: 3 }}>
-                        <Icon name="grip" size={16} color="var(--fg-3)" />
-                      </span>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <button onClick={() => i > 0 && onMovePhase(i, i - 1)} disabled={i === 0} aria-label="Move phase up"
-                          style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.25 : 1, display: 'flex' }}>
-                          <Icon name="chevron-up" size={16} color="var(--fg-2)" stroke={2.4} />
-                        </button>
-                        <button onClick={() => i < phases.length - 1 && onMovePhase(i, i + 1)} disabled={i === phases.length - 1} aria-label="Move phase down"
-                          style={{ border: 'none', background: 'transparent', padding: 2, cursor: i === phases.length - 1 ? 'default' : 'pointer', opacity: i === phases.length - 1 ? 0.25 : 1, display: 'flex' }}>
-                          <Icon name="chevron-down" size={16} color="var(--fg-2)" stroke={2.4} />
-                        </button>
-                      </div>
-                    </div>
+                    <span draggable onDragStart={() => setDragPhase(i)} onDragEnd={() => setDragPhase(null)}
+                      onClick={e => e.stopPropagation()} title="Drag to reorder" aria-label="Drag to reorder"
+                      style={{ cursor: 'grab', display: 'flex', padding: 4, marginRight: 2, flexShrink: 0 }}>
+                      <Icon name="grip" size={16} color="var(--fg-3)" />
+                    </span>
                   )}
                   {editable && onDeletePhase && (
                     <button onClick={e => { e.stopPropagation(); onDeletePhase(p); }} aria-label="Delete phase"
-                      style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', marginRight: 2 }}>
-                      <Icon name="trash" size={15} color="var(--fg-3)" />
+                      style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', marginRight: 2, flexShrink: 0 }}>
+                      <Icon name="trash" size={16} color="var(--fg-3)" />
                     </button>
                   )}
-                  <Icon name="chevron-down" size={18} color="var(--fg-3)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+                  <Icon name="chevron-down" size={20} color="var(--fg-2)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }} />
                 </div>
                 {open === i && (
                   <div style={{ padding: '0 16px 16px 56px' }}>
