@@ -62,19 +62,56 @@ function PhotoSheet({ photo, onClose, onAdd }) {
       </Sheet>
     );
   }
+  // Photo detail: gallery view. Big active photo on top, tap thumbnails or use
+  // arrows to swap. Falls back to the thumbnail-only look when only one photo
+  // is present (or in demo mode where photos is undefined).
+  const photos = Array.isArray(photo.photos) && photo.photos.length ? photo.photos : (photo.thumb ? [photo.thumb] : []);
+  const [idx, setIdx] = useState(0);
+  const total = photos.length;
+  const active = photos[idx] || photo.thumb;
+  const go = (delta) => setIdx(i => (total ? ((i + delta) % total + total) % total : 0));
   return (
     <Sheet onClose={onClose}>
-      <div style={{ borderRadius: 16, overflow: 'hidden', aspectRatio: '4/3', background: photo.tone, position: 'relative', marginBottom: 14, backgroundImage: photo.thumb ? `url(${photo.thumb})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
-        {!photo.thumb && (
+      <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', aspectRatio: '4/3', background: photo.tone || 'var(--surface-2)', marginBottom: 12, backgroundImage: active ? `url(${active})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        {!active && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
             <Icon name="image" size={46} color="#fff" stroke={1.5} />
           </div>
         )}
+        {total > 1 && (
+          <>
+            <button onClick={() => go(-1)} aria-label="Previous photo"
+              style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="chevron-left" size={22} color="#fff" />
+            </button>
+            <button onClick={() => go(1)} aria-label="Next photo"
+              style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: 999, border: 'none', background: 'rgba(0,0,0,.55)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="chevron-right" size={22} color="#fff" />
+            </button>
+            <div style={{ position: 'absolute', right: 10, top: 10, background: 'rgba(0,0,0,.55)', color: '#fff', fontSize: 12, fontWeight: 700, padding: '3px 9px', borderRadius: 999 }}>
+              {idx + 1} / {total}
+            </div>
+          </>
+        )}
       </div>
+
+      {total > 1 && (
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
+          {photos.map((url, i) => (
+            <button key={i} onClick={() => setIdx(i)} aria-label={'Photo ' + (i + 1)}
+              style={{
+                flexShrink: 0, width: 68, height: 52, borderRadius: 8, border: i === idx ? '2px solid var(--inh-lime)' : '2px solid transparent',
+                padding: 0, cursor: 'pointer', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center',
+                opacity: i === idx ? 1 : 0.75,
+              }} />
+          ))}
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18 }}>{photo.room}</div>
-          <div className="inh-row__sub">{photo.date} · {photo.count} photos</div>
+          <div className="inh-row__sub">{photo.date} · {photo.count} photo{photo.count === 1 ? '' : 's'}</div>
         </div>
         {photo.isNew && <Pill status="new" />}
       </div>

@@ -357,20 +357,24 @@ export async function listUpdates(projectId) {
   if (error) throw error;
   const rows = data || [];
   const sorted = (u) => (u.update_photos || []).slice().sort((a, b) => a.sort_order - b.sort_order);
-  const firstPaths = rows.map(u => sorted(u)[0]?.storage_path).filter(Boolean);
+  // Sign EVERY photo path in one batch so the detail view can show them all,
+  // not just the first-photo thumbnail on the tile.
+  const allPaths = rows.flatMap(u => sorted(u).map(p => p.storage_path)).filter(Boolean);
   const urlByPath = {};
-  if (firstPaths.length) {
-    const { data: signed } = await supabase.storage.from('update-photos').createSignedUrls(firstPaths, 3600);
+  if (allPaths.length) {
+    const { data: signed } = await supabase.storage.from('update-photos').createSignedUrls(allPaths, 3600);
     (signed || []).forEach(s => { if (s.signedUrl) urlByPath[s.path] = s.signedUrl; });
   }
   return rows.map((u, i) => {
-    const first = sorted(u)[0]?.storage_path;
+    const paths = sorted(u).map(p => p.storage_path);
+    const urls = paths.map(p => urlByPath[p]).filter(Boolean);
     return {
       id: u.id, room: u.room, isNew: u.is_new,
       date: fmtDate(u.captured_on),
-      count: sorted(u).length,
+      count: paths.length,
       tone: TONES[i % TONES.length],
-      thumb: first ? urlByPath[first] || null : null,
+      thumb: urls[0] || null,
+      photos: urls,
     };
   });
 }
