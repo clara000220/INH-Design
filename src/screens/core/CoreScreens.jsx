@@ -313,6 +313,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
   const [itemDraft, setItemDraft] = useState('');
   const [dragPhase, setDragPhase] = useState(null);   // index of phase being dragged
   const [dragItem, setDragItem] = useState(null);     // index of item being dragged (within open phase)
+  const [reorderIdx, setReorderIdx] = useState(null);  // index of phase currently in long-press reorder mode
   const handover = project?.est_handover
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
     : '20 Jun';
@@ -556,6 +557,9 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
             Project progress
           </SectionHead>
           <SectionCard tone={SECTION_TONES.progress} style={{ overflow: 'hidden' }}>
+            {CAN_EDIT(role) && onMovePhase && phases.length > 1 && reorderIdx == null && (
+              <div className="meta" style={{ padding: '10px 16px 0', fontSize: 12 }}>Tap a phase to expand · Hold 2 seconds to reorder</div>
+            )}
             {phases.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">No phases added yet.</div></div></div>}
             {phases.map((p, i) => {
               const tasks = p.tasks || [];
@@ -565,12 +569,48 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
               const derivedPct = total ? Math.round((doneN / total) * 100) : p.pct;
               const isDone = p.status === 'completed' || (total > 0 && doneN === total);
               const editable = CAN_EDIT(role);
+              const inReorder = reorderIdx === i;
+              // Long-press to enter reorder mode. Cancel if the finger moves,
+              // if the pointer lifts before 2s, or if the row is scrolled.
+              const startHold = (e) => {
+                if (!editable || !onMovePhase || reorderIdx != null) return;
+                const startX = e.clientX, startY = e.clientY;
+                const timer = setTimeout(() => {
+                  setReorderIdx(i);
+                  if (navigator.vibrate) navigator.vibrate(25);
+                  cleanup();
+                }, 2000);
+                const cancel = (ev) => {
+                  if (Math.abs(ev.clientX - startX) > 6 || Math.abs(ev.clientY - startY) > 6) { clearTimeout(timer); cleanup(); }
+                };
+                const stop = () => { clearTimeout(timer); cleanup(); };
+                const cleanup = () => {
+                  window.removeEventListener('pointermove', cancel);
+                  window.removeEventListener('pointerup', stop);
+                  window.removeEventListener('pointercancel', stop);
+                  window.removeEventListener('scroll', stop, true);
+                };
+                window.addEventListener('pointermove', cancel);
+                window.addEventListener('pointerup', stop);
+                window.addEventListener('pointercancel', stop);
+                window.addEventListener('scroll', stop, true);
+              };
               return (
               <div key={i}
                 onDragOver={e => { if (dragPhase != null) e.preventDefault(); }}
                 onDrop={() => { if (dragPhase != null && dragPhase !== i && onMovePhase) onMovePhase(dragPhase, i); setDragPhase(null); }}
-                style={{ borderTop: i ? '1px solid var(--border)' : 'none', background: dragPhase != null && dragPhase !== i ? 'var(--inh-lime-soft)' : 'transparent', transition: 'background .12s' }}>
-                <div className="inh-row" onClick={() => setOpen(open === i ? -1 : i)} style={{ paddingTop: 13, paddingBottom: 13 }}>
+                style={{
+                  borderTop: i ? '1px solid var(--border)' : 'none',
+                  background: inReorder ? 'var(--inh-lime-tint)' : (dragPhase != null && dragPhase !== i ? 'var(--inh-lime-soft)' : 'transparent'),
+                  boxShadow: inReorder ? '0 6px 18px rgba(0,0,0,.12)' : 'none',
+                  transform: inReorder ? 'scale(1.01)' : 'none',
+                  transition: 'background .12s, box-shadow .18s, transform .18s',
+                  position: 'relative',
+                }}>
+                <div className="inh-row"
+                  onClick={() => { if (!inReorder) setOpen(open === i ? -1 : i); }}
+                  onPointerDown={startHold}
+                  style={{ paddingTop: 13, paddingBottom: 13, userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation' }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: isDone ? 'var(--success)' : (derivedPct > 0 || p.status === 'progress') ? 'var(--inh-lime)' : 'var(--surface-2)',
                     color: isDone ? '#fff' : 'var(--inh-charcoal)' }}>
@@ -579,22 +619,31 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                   </div>
                   <div className="inh-row__main" style={{ minWidth: 0 }}>
                     <div className="inh-row__title" style={{ fontSize: 16 }}><span style={{ marginRight: 6 }}>{phaseEmoji(p.name)}</span>{p.name}</div>
-                    <div className="inh-row__sub">{total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates}</div>
+                    <div className="inh-row__sub">
+                      {inReorder ? 'Reorder mode — use ↑ ↓' : (total ? `${doneN}/${total} items · ${derivedPct}%` : p.dates)}
+                    </div>
                   </div>
-                  {editable && onMovePhase && (
-                    <span draggable onDragStart={() => setDragPhase(i)} onDragEnd={() => setDragPhase(null)}
-                      onClick={e => e.stopPropagation()} title="Drag to reorder" aria-label="Drag to reorder"
-                      style={{ cursor: 'grab', display: 'flex', padding: 4, marginRight: 2, flexShrink: 0 }}>
-                      <Icon name="grip" size={16} color="var(--fg-3)" />
-                    </span>
-                  )}
-                  {editable && onDeletePhase && (
+                  {inReorder ? (
+                    <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                      <button onClick={() => { if (i > 0) { onMovePhase(i, i - 1); setReorderIdx(i - 1); } }} disabled={i === 0} aria-label="Move phase up"
+                        style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: i === 0 ? 'var(--surface-2)' : 'var(--surface)', cursor: i === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: i === 0 ? 0.4 : 1, boxShadow: i === 0 ? 'none' : '0 1px 3px rgba(0,0,0,.08)' }}>
+                        <Icon name="chevron-up" size={18} color="var(--inh-charcoal)" stroke={2.6} />
+                      </button>
+                      <button onClick={() => { if (i < phases.length - 1) { onMovePhase(i, i + 1); setReorderIdx(i + 1); } }} disabled={i === phases.length - 1} aria-label="Move phase down"
+                        style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: i === phases.length - 1 ? 'var(--surface-2)' : 'var(--surface)', cursor: i === phases.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: i === phases.length - 1 ? 0.4 : 1, boxShadow: i === phases.length - 1 ? 'none' : '0 1px 3px rgba(0,0,0,.08)' }}>
+                        <Icon name="chevron-down" size={18} color="var(--inh-charcoal)" stroke={2.6} />
+                      </button>
+                      <button onClick={() => setReorderIdx(null)} aria-label="Done reordering"
+                        style={{ marginLeft: 2, width: 32, height: 32, borderRadius: 8, border: 'none', background: 'var(--inh-lime)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="check" size={17} color="var(--inh-charcoal)" stroke={2.8} />
+                      </button>
+                    </div>
+                  ) : (editable && onDeletePhase && (
                     <button onClick={e => { e.stopPropagation(); onDeletePhase(p); }} aria-label="Delete phase"
-                      style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', marginRight: 2, flexShrink: 0 }}>
-                      <Icon name="trash" size={16} color="var(--fg-3)" />
+                      style={{ border: 'none', background: 'transparent', padding: 6, cursor: 'pointer', display: 'flex', flexShrink: 0 }}>
+                      <Icon name="trash" size={17} color="var(--fg-3)" />
                     </button>
-                  )}
-                  <Icon name="chevron-down" size={20} color="var(--fg-2)" style={{ transform: open === i ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }} />
+                  ))}
                 </div>
                 {open === i && (
                   <div style={{ padding: '0 16px 16px 56px' }}>
