@@ -1510,6 +1510,7 @@ export default function App() {
           onAddItem={CAN_EDIT(role) ? handleAddItem : null}
           onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.source === 'task' ? t.taskId : undefined })) : null}
+          onPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}
@@ -1571,6 +1572,7 @@ export default function App() {
           onAddItem={CAN_EDIT(role) ? handleAddItem : null}
           onItemPhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.id })) : null}
           onAddSchedulePhoto={CAN_EDIT(role) ? (t => setPhoto({ add: true, room: t.title, taskId: t.source === 'task' ? t.taskId : undefined })) : null}
+          onPhasePhoto={CAN_EDIT(role) ? (p => setPhoto({ add: true, room: p.name })) : null}
           onToggleScheduleDone={CAN_EDIT(role) ? handleToggleSchedule : null}
           onTogglePhaseTask={CAN_EDIT(role) ? handleTogglePhaseTask : null}
           onMovePhase={CAN_EDIT(role) ? handleMovePhase : null}

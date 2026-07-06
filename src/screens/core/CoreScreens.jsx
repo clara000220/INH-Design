@@ -306,7 +306,7 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
   );
 }
 
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
   const [stageItemDraft, setStageItemDraft] = useState('');
@@ -724,17 +724,28 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       </div>
                     )}
 
-                    {editable && onMarkPhaseComplete && !isDone && (
-                      <div style={{ marginTop: 12 }}>
-                        <button onClick={() => onMarkPhaseComplete(p)} style={{
-                          display: 'flex', alignItems: 'center', gap: 6, border: 'none',
-                          background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '8px 12px',
-                          fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                        }}>
-                          <Icon name="check-circle" size={15} color="var(--inh-charcoal)" /> Mark phase complete
-                        </button>
+                    {(editable && onPhasePhoto) || (editable && onMarkPhaseComplete && !isDone) ? (
+                      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {editable && onPhasePhoto && (
+                          <button onClick={() => onPhasePhoto(p)} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border-strong)',
+                            background: 'var(--surface)', color: 'var(--fg-1)', borderRadius: 10, padding: '8px 12px',
+                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                          }}>
+                            <Icon name="camera" size={15} color="var(--fg-2)" /> Take progress photos
+                          </button>
+                        )}
+                        {editable && onMarkPhaseComplete && !isDone && (
+                          <button onClick={() => onMarkPhaseComplete(p)} style={{
+                            display: 'flex', alignItems: 'center', gap: 6, border: 'none',
+                            background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '8px 12px',
+                            fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
+                          }}>
+                            <Icon name="check-circle" size={15} color="var(--inh-charcoal)" /> Mark phase complete
+                          </button>
+                        )}
                       </div>
-                    )}
+                    ) : null}
                     {isDone && (
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
                         <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
