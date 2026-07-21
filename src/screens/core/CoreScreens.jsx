@@ -468,7 +468,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           );
         })()}
 
-        {role !== 'homeowner' && <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />}
+        <FinanceCard project={project} onUpdateFinance={onUpdateFinance} />
 
         {/* Notes & feedback — anyone on the project (incl. homeowner) can post */}
         <NotesCard role={role} notes={notes} onAddNote={onAddNote} noteDraft={noteDraft} setNoteDraft={setNoteDraft} />
@@ -502,53 +502,8 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           );
         })()}
 
-        {/* This week */}
-        <div>
-          <SectionHead tone={SECTION_TONES.week}
-            action={CAN_EDIT(role) && onAddSchedule ? <button className="inh-link" style={{ fontSize: 12.5 }} onClick={onAddSchedule}>+ Add item</button> : null}>
-            This week
-          </SectionHead>
-          <SectionCard tone={SECTION_TONES.week} style={{ overflow: 'hidden' }}>
-            {schedule.length === 0 && <div className="inh-row" style={{ cursor: 'default' }}><div className="inh-row__main"><div className="inh-row__sub">Nothing scheduled yet.</div></div></div>}
-            {schedule.map((t, i) => {
-              const done = t.state === 'completed';
-              return (
-              <div key={i} className="inh-row" style={{ cursor: 'default' }}>
-                {CAN_EDIT(role) && onToggleScheduleDone ? (
-                  <button onClick={() => onToggleScheduleDone(t)} title={done ? 'Mark not done' : 'Mark complete'} aria-label="Toggle complete"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', marginRight: 2 }}>
-                    <Icon name={done ? 'check-circle' : 'circle'} size={22} color={done ? 'var(--success)' : 'var(--fg-3)'} stroke={done ? 2.2 : 1.8} />
-                  </button>
-                ) : null}
-                <div style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: 'var(--fg-3)' }}>{t.day}</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 19, color: 'var(--fg-1)' }}>{t.date}</div>
-                </div>
-                <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)' }} />
-                <div className="inh-row__main">
-                  <div className="inh-row__title" style={{ fontSize: 14, textDecoration: done ? 'line-through' : 'none', color: done ? 'var(--fg-3)' : 'var(--fg-1)' }}>{t.title}</div>
-                </div>
-                {CAN_EDIT(role) && onAddSchedulePhoto && (
-                  <button onClick={() => onAddSchedulePhoto(t)} title="Add progress photos" aria-label="Add progress photos"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      width: 34, height: 34, borderRadius: 9, border: '1px solid var(--border-strong)',
-                      background: 'var(--surface)', cursor: 'pointer', marginRight: 8,
-                    }}>
-                    <Icon name="camera" size={16} color="var(--fg-2)" />
-                  </button>
-                )}
-                <Pill status={t.state} />
-                {CAN_EDIT(role) && onDeleteSchedule && (
-                  <button onClick={() => onDeleteSchedule(t)} title="Delete item" aria-label="Delete item"
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', marginLeft: 4 }}>
-                    <Icon name="trash" size={15} color="var(--fg-3)" />
-                  </button>
-                )}
-              </div>
-            );})}
-          </SectionCard>
-        </div>
+        {/* This-week card removed — the phase list already carries the
+            in-flight work and having both was confusing to users. */}
 
         {/* Project progress accordion */}
         <div>

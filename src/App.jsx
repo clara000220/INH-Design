@@ -1349,7 +1349,11 @@ export default function App() {
     // doesn't stop the stage itself from saving.
     try { await api.updateProject(id, { stage }); } catch (e) { /* stage column not migrated */ }
     try { await api.updateProject(id, { stage_dates }); } catch (e) { /* stage_dates not migrated */ }
-    try { await reloadTop(); } catch (e) { /* ignore */ }
+    // NOTE: no reloadTop() here on purpose. Refetching the whole projects list
+    // after a single-field update wipes the client-side optimistic state for
+    // any field the DB hasn't caught up on (e.g. quotation when migration 0020
+    // hasn't been applied yet). We only mutated stage + stage_dates — the
+    // optimistic update above is already the truth for those columns.
   };
 
   const handleUpdateFinance = async (patch) => {
@@ -1358,7 +1362,9 @@ export default function App() {
     setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, ...patch } } : e)));
     setProjects(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
     if (!IS_LIVE) return;
-    try { await api.updateProject(id, patch); await reloadTop(); } catch (e) { /* keep optimistic */ }
+    // As above — don't reload; the DB will echo back the same values we just
+    // wrote, and if the write fails the catch keeps the optimistic state.
+    try { await api.updateProject(id, patch); } catch (e) { /* keep optimistic */ }
   };
 
   const handleUpdateStageItems = async (stage, items) => {
