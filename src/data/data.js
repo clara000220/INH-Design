@@ -44,6 +44,10 @@ export const INH_DATA = {
     { id: 'u4', room: 'Hallway', date: '8 May 2026', isNew: false, count: 3, tone: '#76706a' },
     { id: 'u5', room: 'Bedroom 2', date: '2 May 2026', isNew: false, count: 5, tone: '#7a6f63' },
     { id: 'u6', room: 'Exterior', date: '2 May 2026', isNew: false, count: 7, tone: '#646a5c' },
+    // A couple of updates that share their room name with a phase, so the
+    // Project Progress accordion has photos to show when a phase is expanded.
+    { id: 'u7', room: 'Demolition & hacking', date: '5 Mar 2026', isNew: false, count: 4, tone: '#5e6b6a' },
+    { id: 'u8', room: 'Wiring & plumbing', date: '18 Mar 2026', isNew: false, count: 5, tone: '#76706a' },
   ],
 
   documents: [

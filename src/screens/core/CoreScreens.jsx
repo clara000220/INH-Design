@@ -306,7 +306,7 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
   );
 }
 
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, updates = INH_DATA.updates, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onOpenPhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
   const [stageItemDraft, setStageItemDraft] = useState('');
@@ -707,6 +707,45 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       ))}
                       {total === 0 && <div className="meta" style={{ padding: '4px 0' }}>No items yet. Add the tasks for this phase below.</div>}
                     </div>
+
+                    {/* Progress photos for this phase — Updates rows whose room
+                        matches the phase name. Case + whitespace insensitive so
+                        small typos still group correctly. */}
+                    {(() => {
+                      if (!updates || updates.length === 0) return null;
+                      const norm = (s) => String(s || '').trim().toLowerCase();
+                      const key = norm(p.name);
+                      const mine = updates.filter(u => norm(u.room) === key);
+                      if (mine.length === 0) return null;
+                      const totalPhotos = mine.reduce((s, u) => s + (u.count || 0), 0);
+                      return (
+                        <div style={{ marginTop: 14 }}>
+                          <div className="inh-row__sub" style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Icon name="image" size={13} color="var(--fg-2)" />
+                            Progress photos <span className="meta">· {totalPhotos} photo{totalPhotos === 1 ? '' : 's'} across {mine.length} update{mine.length === 1 ? '' : 's'}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                            {mine.map(u => (
+                              <div key={u.id} onClick={() => onOpenPhoto && onOpenPhoto(u)}
+                                style={{ position: 'relative', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', background: u.tone || 'var(--surface-2)', backgroundImage: u.thumb ? `url(${u.thumb})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center', cursor: onOpenPhoto ? 'pointer' : 'default' }}>
+                                {!u.thumb && (
+                                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.32 }}>
+                                    <Icon name="image" size={26} color="#fff" stroke={1.6} />
+                                  </div>
+                                )}
+                                <div style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(42,37,35,0.7)', color: '#fff', fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <Icon name="image" size={10} color="#fff" /> {u.count || 0}
+                                </div>
+                                {u.isNew && (
+                                  <div style={{ position: 'absolute', top: 6, left: 6 }}><Pill status="new" /></div>
+                                )}
+                                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '18px 8px 6px', background: 'linear-gradient(transparent, rgba(42,37,35,0.55))', color: '#fff', fontSize: 10.5, fontWeight: 600 }}>{u.date}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Add an item to this phase */}
                     {editable && onAddItem && (
