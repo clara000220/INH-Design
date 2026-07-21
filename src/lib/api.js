@@ -578,6 +578,32 @@ export async function listCredentials() {
   return map;
 }
 
+// Any signed-in user can change their own password. Verifies the current
+// password by re-signing-in first, then updates. On success we also clear
+// the account_credentials.temp_password row so the owner is no longer able
+// to see the (now stale) initial password — it's the user's private
+// password from this point on.
+export async function changeMyPassword({ currentPassword, newPassword }) {
+  const { data: sess } = await supabase.auth.getUser();
+  const email = sess?.user?.email;
+  if (!email) throw new Error('Not signed in.');
+  if (!currentPassword) throw new Error('Please enter your current password.');
+  if (!newPassword || newPassword.length < 8) throw new Error('New password must be at least 8 characters.');
+  if (newPassword === currentPassword) throw new Error('New password must differ from the current one.');
+
+  // Verify the current password. Success re-issues the session; on failure
+  // the existing session is untouched so the user isn't kicked out.
+  const { error: verifyErr } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+  if (verifyErr) throw new Error('Current password is incorrect.');
+
+  const { error: upErr } = await supabase.auth.updateUser({ password: newPassword });
+  if (upErr) throw new Error(upErr.message || 'Could not update password.');
+
+  // Best-effort: clear the mirrored temp password so it stops leaking to the
+  // owner's Users screen. RLS lets a user delete their own credentials row.
+  try { await supabase.from('account_credentials').delete().eq('user_id', sess.user.id); } catch { /* ignore */ }
+}
+
 // Owner-only: reset a user's password to a fresh random string via an Edge
 // Function. Returns { password, login } — the plaintext is available exactly
 // once so the owner can copy it and share via WhatsApp; the auth store keeps

@@ -1059,7 +1059,7 @@ export function BackupScreen({ onExport }) {
 }
 
 /* =================== MORE =================== */
-export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPlan, onBackup, backupDue, onSignOut, onEditName, onSettings, onSupport, onAllProjects, onManageUpdates }) {
+export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPlan, onBackup, backupDue, onSignOut, onEditName, onChangePassword, onSettings, onSupport, onAllProjects, onManageUpdates }) {
   const meta = INH_DATA.roleMeta[role];
   const name = profile?.name || meta.person;
   const initials = profile?.initials || meta.initials;
@@ -1124,6 +1124,7 @@ export function MoreScreen({ role, profile, onUsers, onTeam, onAddAccount, onPla
           <div className="inh-section">{t('Account')}</div>
           <Group>
             <Item icon="user" label={t('Edit my name')} onClick={onEditName} />
+            {onChangePassword && <Item icon="lock" label={t('Change password')} onClick={onChangePassword} />}
             <Item icon="settings" label={t('Settings & language')} onClick={onSettings} />
             <Item icon="help-circle" label={t('Support')} onClick={onSupport} />
           </Group>

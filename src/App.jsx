@@ -390,6 +390,56 @@ function PropertySheet({ role, projects, selectedId, onSelect, onClose }) {
   );
 }
 
+// User self-service: change my own password. Requires the current password
+// to prove the person at the keyboard is the account holder (guards against
+// a passing device left signed in).
+function ChangePasswordSheet({ onClose, onSave }) {
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [done, setDone] = useState(false);
+  const mismatch = confirm.length > 0 && confirm !== next;
+  const ready = cur && next.length >= 8 && confirm === next;
+  const save = async () => {
+    if (!ready) return;
+    setBusy(true); setErr(null);
+    try { await onSave({ currentPassword: cur, newPassword: next }); setDone(true); }
+    catch (e) { setErr(e?.message || 'Could not update password'); }
+    finally { setBusy(false); }
+  };
+  if (done) {
+    return (
+      <Sheet title="Password updated" onClose={onClose}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '12px 0 6px' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--success-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="check-circle" size={26} color="var(--success)" />
+          </div>
+          <p className="body-2" style={{ textAlign: 'center', margin: 0 }}>Your new password is now active. Use it next time you sign in.</p>
+        </div>
+        <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={onClose}>Done</Btn></div>
+      </Sheet>
+    );
+  }
+  return (
+    <Sheet title="Change password" onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 14 }}>Enter your current password, then choose a new one at least 8 characters long.</p>
+      <Field label="Current password" icon="lock" password value={cur} onChange={setCur} placeholder="Enter current password" autoFocus />
+      <div style={{ marginTop: 12 }}>
+        <Field label="New password" icon="lock" password value={next} onChange={setNext} placeholder="At least 8 characters" />
+      </div>
+      <div style={{ marginTop: 12 }}>
+        <Field label="Confirm new password" icon="lock" password value={confirm} onChange={setConfirm} placeholder="Type it again" error={mismatch ? "Doesn't match" : null} />
+      </div>
+      {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err}</p>}
+      <div style={{ marginTop: 18 }}>
+        <Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Updating…' : 'Update password'}</Btn>
+      </div>
+    </Sheet>
+  );
+}
+
 function EditNameSheet({ initial, onClose, onSave }) {
   const [name, setName] = useState(initial || '');
   const [busy, setBusy] = useState(false);
@@ -1097,6 +1147,13 @@ export default function App() {
     await reloadTop();
   };
 
+  // Any user can change their own password. Returns void; the sheet handles
+  // its own success + error states.
+  const handleChangeMyPassword = async ({ currentPassword, newPassword }) => {
+    if (!IS_LIVE) throw new Error('Sign in to change your password.');
+    await api.changeMyPassword({ currentPassword, newPassword });
+  };
+
   // Owner-only: reset a user's password. Returns { password, login } to the
   // Users screen so it can show the new value in a one-time dialog; a
   // reloadTop() then refreshes the credentials map so the row's persistent
@@ -1618,6 +1675,7 @@ export default function App() {
       onBackup={role === 'owner' && IS_LIVE ? () => push({ type: 'backup' }) : null}
       backupDue={role === 'owner' && IS_LIVE ? backupIsDue() : false}
       onSignOut={signOut} onEditName={() => setSheet('editName')}
+      onChangePassword={IS_LIVE ? () => setSheet('changePassword') : null}
       onSettings={() => setSheet('settings')} onSupport={() => setSheet('support')}
       onAllProjects={() => { setTab('home'); setStack([]); }}
       onManageUpdates={() => { setTab('updates'); setStack([]); }} />;
@@ -1640,6 +1698,7 @@ export default function App() {
       {sheet === 'property' && <PropertySheet role={role} projects={projects} selectedId={currentProject?.id} onSelect={setFeedProjectId} onClose={() => setSheet(null)} />}
       {sheet === 'invite' && <AddAccountSheet onClose={() => setSheet(null)} onCreate={handleAddAccount} callerRole={role} />}
       {sheet === 'editName' && <EditNameSheet initial={profile?.full_name || profile?.name || ''} onClose={() => setSheet(null)} onSave={handleEditName} />}
+      {sheet === 'changePassword' && <ChangePasswordSheet onClose={() => setSheet(null)} onSave={handleChangeMyPassword} />}
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)}
         onEditTemplate={CAN_EDIT(role) ? () => { setSheet(null); push({ type: 'template' }); } : null} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
