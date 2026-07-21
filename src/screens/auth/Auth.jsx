@@ -59,7 +59,14 @@ export function Login({ onSignIn, onForgot, onRegister, live }) {
       setRemember(remember);
       await onSignIn(normalizeLogin(email), pw);
     } catch (e) {
-      setErr(e?.message || 'Email or password is incorrect');
+      // Route the auth service's "Invalid login credentials" (and equivalents)
+      // to a message that tells the user exactly what to do next: talk to
+      // their INH contact rather than hunt for a self-serve reset link.
+      const raw = String(e?.message || '');
+      const badCreds = !raw || /invalid|incorrect|credentials|not\s+found|user\s+not|password/i.test(raw);
+      setErr(badCreds
+        ? 'Incorrect email or password. Please contact your INH Design person in charge to reset it.'
+        : raw);
     } finally {
       setBusy(false);
     }
@@ -77,7 +84,7 @@ export function Login({ onSignIn, onForgot, onRegister, live }) {
           error={err} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 0 22px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', margin: '18px 0 22px' }}>
         <button onClick={() => setRememberOn(r => !r)} style={{ display: 'flex', alignItems: 'center', gap: 9, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
           <span className={'inh-toggle' + (remember ? ' on' : '')} style={{
             width: 42, height: 25, borderRadius: 999, position: 'relative', flexShrink: 0,
@@ -91,7 +98,6 @@ export function Login({ onSignIn, onForgot, onRegister, live }) {
           </span>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)' }}>Remember me</span>
         </button>
-        <button className="inh-link" onClick={onForgot}>Forgot password?</button>
       </div>
 
       <Btn variant="primary" onClick={submit} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
