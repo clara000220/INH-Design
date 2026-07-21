@@ -408,12 +408,14 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 /* =================== USERS DIRECTORY (owner, under More) =================== */
 const ROLE_OPTIONS = ['owner', 'admin', 'homeowner'];
 
-export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, onDeleteUser, projects = [], onUserProjects, onAssignProject, onUnassignProject, meId, storageBytes = 0 }) {
+export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, onDeleteUser, onResetPassword, projects = [], onUserProjects, onAssignProject, onUnassignProject, meId, storageBytes = 0 }) {
   const count = users.length;
   const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
   const storagePct = Math.min(100, Math.round((storageBytes / (10 * GB)) * 100));
   const [edit, setEdit] = useState(null);   // user being edited
   const [delUser, setDelUser] = useState(null);   // user pending delete confirm
+  const [resetUser, setResetUser] = useState(null);   // user pending password reset confirm
+  const [resetResult, setResetResult] = useState(null); // { user, login, password } after a successful reset
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [memberIds, setMemberIds] = useState(null);   // project ids the edited user is in
@@ -447,6 +449,20 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
     try { await onDeleteUser(delUser.id); setDelUser(null); setEdit(null); }
     catch (e) { setErr(e?.message || 'Could not delete user'); setDelUser(null); }
     finally { setBusy(false); }
+  };
+
+  const doResetPassword = async () => {
+    if (!resetUser || !onResetPassword) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await onResetPassword(resetUser.id);
+      if (!r?.password) throw new Error('Reset did not return a new password');
+      setResetResult({ user: resetUser, login: r.login, password: r.password });
+      setResetUser(null); setEdit(null);
+    } catch (e) {
+      setErr(e?.message || 'Could not reset password');
+      setResetUser(null);
+    } finally { setBusy(false); }
   };
   const [revealed, setRevealed] = useState(() => new Set());
   const [copied, setCopied] = useState(null);
@@ -585,9 +601,15 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
           )}
           {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 12 }}>{err}</p>}
           {busy && <p className="meta" style={{ marginTop: 10 }}>Saving…</p>}
+          {onResetPassword && edit.role !== 'owner' && (
+            <button onClick={() => setResetUser(edit)} disabled={busy}
+              style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--fg-1)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+              <Icon name="lock" size={15} color="var(--fg-1)" /> Reset password
+            </button>
+          )}
           {onDeleteUser && (
             <button onClick={() => setDelUser(edit)} disabled={busy}
-              style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
+              style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--error)', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: 0 }}>
               <Icon name="trash" size={15} color="var(--error)" /> Delete user
             </button>
           )}
@@ -605,6 +627,57 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
             <Btn variant="ghost" onClick={() => setDelUser(null)} disabled={busy}>Cancel</Btn>
             <Btn variant="danger" onClick={removeUser} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</Btn>
           </div>
+        </Dialog>
+      )}
+
+      {resetUser && (
+        <Dialog onClose={() => setResetUser(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="lock" size={24} color="var(--inh-charcoal)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Reset this password?</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>
+            A new temporary password will be generated for <b style={{ color: 'var(--fg-1)' }}>{resetUser.name}</b>. Their current password stops working immediately. Copy the new one and send it to them via WhatsApp.
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setResetUser(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="primary" onClick={doResetPassword} disabled={busy}>{busy ? 'Resetting…' : 'Reset password'}</Btn>
+          </div>
+        </Dialog>
+      )}
+
+      {resetResult && (
+        <Dialog onClose={() => setResetResult(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--success-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="check-circle" size={26} color="var(--success)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 4 }}>Password reset for {resetResult.user.name}</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 14 }}>Send these details to them. This is the last time you'll see them together — the password is also visible on the user row from now on.</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--fg-3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Login</div>
+                <div style={{ fontSize: 14, color: 'var(--fg-1)', fontWeight: 600, wordBreak: 'break-all' }}>{resetResult.login}</div>
+              </div>
+              <button onClick={() => copy('reset-login', resetResult.login)} aria-label="Copy login"
+                style={{ flexShrink: 0, border: 'none', background: 'var(--surface)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: 'var(--fg-1)' }}>
+                <Icon name="copy" size={14} color="var(--fg-2)" />{copied === 'reset-login' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--inh-lime)', borderRadius: 10, background: 'var(--inh-lime-soft)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--fg-3)', letterSpacing: '.06em', textTransform: 'uppercase' }}>New password</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '.02em', color: 'var(--inh-charcoal)', fontWeight: 800, wordBreak: 'break-all' }}>{resetResult.password}</div>
+              </div>
+              <button onClick={() => copy('reset-pw', resetResult.password)} aria-label="Copy password"
+                style={{ flexShrink: 0, border: 'none', background: 'var(--inh-lime)', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 800, color: 'var(--inh-charcoal)' }}>
+                <Icon name="copy" size={14} color="var(--inh-charcoal)" />{copied === 'reset-pw' ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <Btn variant="charcoal" onClick={() => setResetResult(null)}>Done</Btn>
         </Dialog>
       )}
     </div>

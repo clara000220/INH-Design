@@ -1097,6 +1097,17 @@ export default function App() {
     await reloadTop();
   };
 
+  // Owner-only: reset a user's password. Returns { password, login } to the
+  // Users screen so it can show the new value in a one-time dialog; a
+  // reloadTop() then refreshes the credentials map so the row's persistent
+  // "reveal/copy" chip picks up the same value from account_credentials.
+  const handleResetPassword = async (userId) => {
+    if (!IS_LIVE) return null;
+    const res = await api.resetUserPassword(userId);
+    await reloadTop();
+    return res;
+  };
+
   const handleAssignUserProject = async (projectId, userId) => {
     if (!IS_LIVE) return;
     await api.addMember(projectId, userId);
@@ -1544,6 +1555,7 @@ export default function App() {
         return <UsersScreen users={IS_LIVE ? users : undefined} onInvite={() => setSheet('invite')}
           onChangeRole={role === 'owner' && IS_LIVE ? handleChangeRole : null}
           onDeleteUser={role === 'owner' && IS_LIVE ? handleDeleteUser : null}
+          onResetPassword={role === 'owner' && IS_LIVE ? handleResetPassword : null}
           projects={IS_LIVE ? projects : []}
           onUserProjects={IS_LIVE ? api.listUserProjects : null}
           onAssignProject={role === 'owner' && IS_LIVE ? handleAssignUserProject : null}

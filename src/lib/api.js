@@ -578,6 +578,24 @@ export async function listCredentials() {
   return map;
 }
 
+// Owner-only: reset a user's password to a fresh random string via an Edge
+// Function. Returns { password, login } — the plaintext is available exactly
+// once so the owner can copy it and share via WhatsApp; the auth store keeps
+// only the hashed version. The Users screen credentials map is refreshed
+// separately after this call resolves.
+export async function resetUserPassword(userId) {
+  const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+    body: { userId },
+  });
+  if (error) {
+    let msg = error.message || 'Could not reset password';
+    try { const ctx = await error.context?.json?.(); if (ctx?.error) msg = ctx.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;    // { ok, password, login }
+}
+
 // Owner-only: permanently delete a user (auth account + profile + memberships +
 // stored credentials cascade). Enforced server-side in the delete_user function.
 export async function deleteUser(userId) {
