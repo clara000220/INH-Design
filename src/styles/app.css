@@ -263,6 +263,11 @@
   width: 100%; background: var(--surface-white); border-radius: 22px 22px 0 0;
   box-shadow: var(--shadow-sheet); padding: 10px 16px 30px;
   animation: sheetUp .24s cubic-bezier(.2,.7,.3,1);
+  /* Sheet content can be taller than the viewport (change-role sheet lists
+     every project). Cap the sheet at 90% of the visible height and scroll
+     inside so the bottom rows stay reachable on both mobile and desktop. */
+  max-height: 90dvh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .inh-sheet__grab { width: 38px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 0 auto 14px; }
