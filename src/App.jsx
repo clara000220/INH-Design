@@ -1238,7 +1238,18 @@ export default function App() {
       const items = tks.map(it => `<li>${it.done ? '&#9745;' : '&#9744;'} ${esc(it.title)}${it.due_date ? ` <span class="muted">(${fmt(it.due_date)}${it.end_date ? ` &rarr; ${fmt(it.end_date)}` : ''})</span>` : ''}</li>`).join('');
       return `<div class="phase"><div class="ph-h"><b>${i + 1}. ${esc(ph.name)}</b><span>${dn}/${t} items &middot; ${pct}%</span></div>${items ? `<ul>${items}</ul>` : '<p class="muted">No items.</p>'}</div>`;
     }).join('');
-    const photosHtml = updates.filter(u => u.thumb).map(u => `<figure class="photo"><img src="${u.thumb}"/><figcaption>${esc(u.room || '')}${u.date ? ' &middot; ' + esc(u.date) : ''}</figcaption></figure>`).join('');
+    // For each update, walk every photo in u.photos (populated by
+    // listUpdates from the update_photos rows). Fall back to the single
+    // thumbnail when photos isn't available (demo mode or old records),
+    // so we never end up with nothing. The caption carries an N/total
+    // suffix so it's clear how many shots the reader is seeing.
+    const photosHtml = updates.flatMap(u => {
+      const urls = (Array.isArray(u.photos) && u.photos.length ? u.photos
+                    : u.thumb ? [u.thumb] : []);
+      if (!urls.length) return [];
+      const label = `${esc(u.room || '')}${u.date ? ' &middot; ' + esc(u.date) : ''}`;
+      return urls.map((url, i) => `<figure class="photo"><img src="${url}"/><figcaption>${label}${urls.length > 1 ? ` (${i + 1}/${urls.length})` : ''}</figcaption></figure>`);
+    }).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p?.name || 'Project')} report</title>
 <style>
   *{box-sizing:border-box}
