@@ -97,5 +97,12 @@ export const INH_DATA = {
   },
 };
 
-export function rm(n) { return 'RM ' + n.toLocaleString('en-MY'); }
-export function rmk(n) { return 'RM ' + (n / 1000).toFixed(0) + 'k'; }
+// Currency formatter — always two decimals so amounts stay exact (RM 5,250.75
+// rather than the rounded "RM 5k" abbreviation the tiles used to show).
+export function rm(n) {
+  const v = Number(n) || 0;
+  return 'RM ' + v.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Kept as an alias so existing call sites still work; both now render the
+// exact figure — the "k" shorthand was hiding cents on the fees tiles.
+export const rmk = rm;
