@@ -38,20 +38,36 @@ export async function updateMyName(fullName) {
 
 /* ------------------------------ projects ------------------------------ */
 export async function listProjects() {
+  // Join in the creator's profile so the Client Status card can show
+  // "Created 1 Jun 2026 by Ali bin Ahmad". Older rows have created_by=null,
+  // in which case creator stays null and the UI just shows the date.
   const { data, error } = await supabase.from('projects')
-    .select('*').order('code', { ascending: true });
+    .select('*, creator:created_by(full_name, role)')
+    .order('code', { ascending: true });
   if (error) throw error;
   return (data || []).map(p => ({
     id: p.id, name: p.name, code: p.code, address: p.address, type: p.type,
     progress: p.progress, status: p.status, est_handover: p.est_handover,
     stage: p.stage, stage_dates: p.stage_dates || {}, stage_items: p.stage_items || {}, created_at: p.created_at,
     quotation: p.quotation, received_payments: p.received_payments || [],
+    created_by: p.created_by || null,
+    creator_name: p.creator?.full_name || null,
+    creator_role: p.creator?.role || null,
   }));
 }
 
 export async function createProject({ name, code, address, type, est_handover }) {
+  // Stamp the current user as the creator so the project history shows who
+  // added it. Uses auth.uid() looked up client-side because the projects
+  // table has no default on created_by.
+  const { data: u } = await supabase.auth.getUser();
   const { data, error } = await supabase.from('projects')
-    .insert({ name, code, address, type, est_handover: est_handover || null, progress: 0, status: 'pending' })
+    .insert({
+      name, code, address, type,
+      est_handover: est_handover || null,
+      progress: 0, status: 'pending',
+      created_by: u?.user?.id || null,
+    })
     .select().single();
   if (error) throw error;
   return data;

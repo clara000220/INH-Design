@@ -405,7 +405,8 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           const created = project?.created_at ? new Date(project.created_at) : null;
           const createdStr = created && !isNaN(created) ? created.toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
           const days = created && !isNaN(created) ? Math.floor((Date.now() - created.getTime()) / 86400000) : null;
-          const agoText = days == null ? '' : `Created ${createdStr} · ${days <= 0 ? 'today' : days === 1 ? '1 day ago' : days + ' days ago'}`;
+          const byText = project?.creator_name ? ` by ${project.creator_name}` : '';
+          const agoText = days == null ? '' : `Created ${createdStr}${byText} · ${days <= 0 ? 'today' : days === 1 ? '1 day ago' : days + ' days ago'}`;
           return (
             <div>
               <SectionHead tone={SECTION_TONES.status}>Client status</SectionHead>
@@ -487,26 +488,9 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           </button>
         )}
 
-        {/* What's happening now — derived from the schedule */}
-        {(() => {
-          const nowItem = (schedule || []).find(s => s.state === 'today') || (schedule || []).find(s => s.state !== 'completed');
-          if (!nowItem) return null;
-          return (
-            <div>
-              <SectionHead tone={SECTION_TONES.now}>What's happening now</SectionHead>
-              <SectionCard tone={SECTION_TONES.now} style={{ padding: 16, display: 'flex', gap: 13, alignItems: 'center' }}>
-                <div style={{ width: 46, height: 46, borderRadius: 12, background: SECTION_TONES.now.tint, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Icon name="hard-hat" size={24} color={SECTION_TONES.now.fg} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15 }}>{nowItem.title}</div>
-                  <div className="body-2" style={{ marginTop: 2 }}>{nowItem.state === 'today' ? 'Scheduled for today' : 'Coming up next'}</div>
-                </div>
-                <Pill status={nowItem.state} />
-              </SectionCard>
-            </div>
-          );
-        })()}
+        {/* "What's happening now" card removed — duplicative of the Project
+            Progress accordion below and often stale on projects that don't
+            keep a schedule up to date. */}
 
         {/* This-week card removed — the phase list already carries the
             in-flight work and having both was confusing to users. */}
