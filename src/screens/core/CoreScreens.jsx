@@ -306,7 +306,7 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
   );
 }
 
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, updates = INH_DATA.updates, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onOpenPhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, updates = INH_DATA.updates, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onOpenPhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onUploadDoc, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
   const [stageItemDraft, setStageItemDraft] = useState('');
@@ -353,6 +353,12 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                 <button onClick={onOpenDocs} aria-label="Documents"
                   style={{ border: 'none', background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--on-dark-2)', fontSize: 11.5, fontWeight: 600 }}>
                   <Icon name="file-text" size={12} color="var(--on-dark-2)" /> Docs
+                </button>
+              )}
+              {CAN_EDIT(role) && onUploadDoc && (
+                <button onClick={onUploadDoc} aria-label="Upload document"
+                  style={{ border: 'none', background: 'rgba(207,224,74,0.18)', borderRadius: 8, padding: '5px 9px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: 'var(--inh-lime)', fontSize: 11.5, fontWeight: 700 }}>
+                  <Icon name="download" size={12} color="var(--inh-lime)" style={{ transform: 'rotate(180deg)' }} /> Upload
                 </button>
               )}
               {CAN_EDIT(role) && onEditProject && (
@@ -611,9 +617,20 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                     <div style={{ display: 'flex', flexDirection: 'column', marginTop: 10 }}>
                       {tasks.map((t, ti) => (
                         <div key={t.id}
+                          draggable={editable && !!onMoveTask}
+                          onDragStart={e => { if (editable && onMoveTask) { setDragItem(ti); try { e.dataTransfer.effectAllowed = 'move'; } catch { /* ignore */ } } }}
+                          onDragEnd={() => setDragItem(null)}
                           onDragOver={e => { if (dragItem != null) { e.preventDefault(); e.stopPropagation(); } }}
                           onDrop={e => { e.stopPropagation(); if (dragItem != null && dragItem !== ti && onMoveTask) onMoveTask(p, dragItem, ti); setDragItem(null); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 4px', borderTop: ti ? '1px solid var(--border)' : 'none', background: dragItem != null && dragItem !== ti ? 'var(--inh-lime-soft)' : 'transparent', borderRadius: 6, transition: 'background .12s' }}>
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 4px',
+                            borderTop: ti ? '1px solid var(--border)' : 'none',
+                            background: dragItem === ti ? 'var(--surface-2)' : (dragItem != null && dragItem !== ti ? 'var(--inh-lime-soft)' : 'transparent'),
+                            opacity: dragItem === ti ? 0.55 : 1,
+                            borderRadius: 6,
+                            cursor: editable && onMoveTask ? 'grab' : 'default',
+                            transition: 'background .12s, opacity .12s',
+                          }}>
                           <button onClick={() => editable && onTogglePhaseTask && onTogglePhaseTask(t)} aria-label="Toggle item"
                             style={{ border: 'none', background: 'transparent', padding: 0, flexShrink: 0, display: 'flex', cursor: editable && onTogglePhaseTask ? 'pointer' : 'default' }}>
                             <Icon name={t.done ? 'check-circle' : 'circle'} size={19} color={t.done ? 'var(--success)' : 'var(--fg-3)'} stroke={t.done ? 2.2 : 1.8} />

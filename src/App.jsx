@@ -1553,6 +1553,15 @@ export default function App() {
     await reloadTop();
   };
 
+  // Owner-only: toggle final approval on a payment. Approved payments have
+  // their amount locked (DB trigger enforces it; the UI disables the input).
+  const handleApprovePayment = async (id, approve) => {
+    if (!IS_LIVE) return;
+    if (approve) await api.approvePayment(id);
+    else await api.unapprovePayment(id);
+    await loadDetail(activeProjectId);
+  };
+
   // ---- header config ----
   const header = () => {
     if (top) {
@@ -1606,6 +1615,7 @@ export default function App() {
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
+          onUploadDoc={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
@@ -1619,6 +1629,8 @@ export default function App() {
           onSetStatus={role === 'owner' ? handleSetPayment : null}
           onEdit={role === 'owner' ? handleEditPayment : null}
           onDelete={role === 'owner' ? handleDeletePayment : null}
+          onApprove={role === 'owner' ? handleApprovePayment : null}
+          isOwner={role === 'owner'}
           canSetStatus={role === 'owner'} />;
       if (top.type === 'plan')
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
@@ -1670,6 +1682,7 @@ export default function App() {
           onDeleteItem={CAN_EDIT(role) ? handleDeleteTask : null}
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
+          onUploadDoc={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}

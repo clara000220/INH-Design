@@ -122,7 +122,12 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
 
 /* Add / edit a contractor payment. No bank account numbers are stored — only
    a method label (e.g. "Bank transfer") and the amount. */
-function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
+function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetStatus = true }) {
+  const approvedAt = pay?.approved_at || null;
+  // Amount is locked once the owner has approved — for admins only.
+  // Owners can still change it; changing it doesn't auto-unapprove, but the
+  // owner can hit "Revoke approval" if they want to signal it's back open.
+  const amountLocked = !!approvedAt && !isOwner;
   const [f, setF] = useState({
     contractor: pay?.contractor || '', stage: pay?.stage || '',
     amount: pay?.amount != null ? String(pay.amount) : '',
@@ -139,22 +144,42 @@ function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
   const removeItem = (i) => setItems(s => s.filter((_, idx) => idx !== i));
   const itemsTotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
   const ready = f.contractor.trim() && f.amount !== '' && !isNaN(Number(f.amount));
-  const save = async () => {
+  const [savedFlash, setSavedFlash] = useState(false);
+  const doSave = async (thenReset) => {
     if (!ready) return;
     setBusy(true); setErr(null);
     const cleanItems = items.map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0, status: it.status || 'pending' })).filter(it => it.title);
     try {
       await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
-      onClose();
+      if (thenReset) {
+        // Keep the contractor + stage + method — the point of "add another" is
+        // logging a second progress payment to the same person quickly.
+        setF(s => ({ ...s, amount: '', due_date: '', status: canSetStatus ? 'pending' : 'pending' }));
+        setItems([]);
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 1600);
+      } else {
+        onClose();
+      }
     } catch (e) { setErr(e?.message || 'Could not save payment'); }
     finally { setBusy(false); }
   };
+  const save = () => doSave(false);
+  const saveAndAdd = () => doSave(true);
   return (
     <Sheet title={pay ? 'Edit payment' : 'Add payment'} onClose={onClose}>
+      {approvedAt && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'var(--success-tint)', border: '1px solid var(--success)', borderRadius: 10, marginBottom: 12 }}>
+          <Icon name="shield-check" size={18} color="var(--success)" />
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--fg-1)' }}>
+            <b>Owner-approved</b> · Amount is locked. {isOwner ? 'You (owner) can still change it.' : 'Ask the owner to unlock or revise.'}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
         <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
-        <Field label="Amount (RM)" icon="banknote" type="number" value={f.amount} onChange={set('amount')} placeholder="e.g. 14200" />
+        <Field label={amountLocked ? 'Amount (RM) — locked' : 'Amount (RM)'} icon="banknote" type="number" value={f.amount} onChange={amountLocked ? (() => {}) : set('amount')} placeholder="e.g. 14200" />
         <div>
           <label className="inh-label">Items / breakdown (optional)</label>
           {items.length > 0 && (
@@ -200,13 +225,34 @@ function PaymentForm({ pay, onClose, onSave, canSetStatus = true }) {
         )}
       </div>
       {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
-      <div style={{ marginTop: 18 }}><Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : (pay ? 'Save changes' : (canSetStatus ? 'Add payment' : 'Request payment'))}</Btn></div>
+      {savedFlash && (
+        <p style={{ color: 'var(--success)', fontSize: 12.5, marginTop: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Icon name="check-circle" size={14} color="var(--success)" /> Saved. Enter the next payment for {f.contractor || 'this contractor'} below.
+        </p>
+      )}
+      <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Btn variant="primary" icon="check" onClick={save} disabled={busy || !ready}>{busy ? 'Saving…' : (pay ? 'Save changes' : (canSetStatus ? 'Add payment' : 'Request payment'))}</Btn>
+        {!pay && (
+          <Btn variant="ghost" icon="plus" onClick={saveAndAdd} disabled={busy || !ready}>Save &amp; add another for {f.contractor.trim() || 'this contractor'}</Btn>
+        )}
+        {pay && isOwner && onApprove && (
+          approvedAt ? (
+            <Btn variant="ghost" icon="x" onClick={async () => { setBusy(true); setErr(null); try { await onApprove(pay.id, false); onClose(); } catch (e) { setErr(e?.message || 'Could not revoke approval'); } finally { setBusy(false); } }} disabled={busy}>
+              Revoke approval (unlock amount)
+            </Btn>
+          ) : (
+            <Btn variant="charcoal" icon="shield-check" onClick={async () => { setBusy(true); setErr(null); try { await onApprove(pay.id, true); onClose(); } catch (e) { setErr(e?.message || 'Could not approve'); } finally { setBusy(false); } }} disabled={busy}>
+              Approve payment (lock the amount)
+            </Btn>
+          )
+        )}
+      </div>
     </Sheet>
   );
 }
 
 /* =================== FEES — project payment detail =================== */
-export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus, onAdd, onEdit, onDelete, canSetStatus = true }) {
+export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.payments, audit = INH_DATA.audit, onSetStatus, onAdd, onEdit, onDelete, onApprove, isOwner = false, canSetStatus = true }) {
   const [confirm, setConfirm] = useState(null); // {pay, action}
   const [payments, setPayments] = useState(paymentsProp);
   const [toast, setToast] = useState(null);
@@ -270,7 +316,14 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
                   <div className="inh-row__ico" style={{ marginTop: 2 }}><Icon name="hard-hat" size={20} /></div>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-                      <div className="inh-row__title">{p.contractor}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <div className="inh-row__title">{p.contractor}</div>
+                        {p.approved_at && (
+                          <span title="Owner-approved — amount locked" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--success-tint)', color: '#357a4c', fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 999 }}>
+                            <Icon name="shield-check" size={11} color="#357a4c" /> Approved
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div className="inh-figure" style={{ fontSize: 15 }}>{rm(p.amount)}</div>
                         {onEdit && <Icon name="pencil" size={13} color="var(--fg-3)" />}
@@ -328,21 +381,9 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
           </div>
         </div>
 
-        {/* audit trail */}
-        <div>
-          <div className="inh-section" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="shield-check" size={13} color="var(--fg-3)" /> Audit trail</div>
-          <div className="inh-card" style={{ padding: '4px 0' }}>
-            {audit.map((a, i) => (
-              <div key={i} style={{ padding: '11px 16px', borderTop: i ? '1px solid var(--border)' : 'none', display: 'flex', gap: 11 }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--inh-lime)', marginTop: 6, flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg-1)' }}>{a.action}</div>
-                  <div className="meta" style={{ marginTop: 1 }}>{a.actor} · {a.when}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Audit trail removed from this view — the server still writes every
+            release / edit to audit_log for compliance, but it doesn't need to
+            take up space on the day-to-day Fees screen. */}
       </div>
 
       {confirm && (
@@ -385,6 +426,7 @@ export function FeesDetailScreen({ project, payments: paymentsProp = INH_DATA.pa
 
       {form && (
         <PaymentForm pay={form.pay} canSetStatus={canSetStatus} onClose={() => setForm(null)}
+          isOwner={isOwner} onApprove={onApprove}
           onSave={(data) => (form.pay ? onEdit(form.pay.id, data) : onAdd(data))} />
       )}
 

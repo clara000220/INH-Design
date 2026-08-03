@@ -467,12 +467,36 @@ export async function listPayments(projectId) {
   return (data || []).map(p => ({
     id: p.id, contractor: p.contractor, stage: p.stage, amount: Number(p.amount),
     status: p.status, method: p.method, due_date: p.due_date, items: p.items || [],
+    approved_at: p.approved_at || null,
+    approved_by: p.approved_by || null,
     date: p.status === 'released'
       ? 'Released ' + fmtDayMon(p.released_at || p.due_date)
       : p.status === 'overdue' ? 'Overdue ' + fmtDayMon(p.due_date)
       : p.status === 'hold' ? 'On hold'
       : p.due_date ? 'Due ' + fmtDayMon(p.due_date) : '',
   }));
+}
+
+// Owner-only: mark a payment as approved (freezes the amount for admins).
+// The DB trigger silently ignores the update if called by a non-owner, so
+// we also check role client-side to fail loudly rather than pretending it
+// worked.
+export async function approvePayment(id) {
+  const { data: u } = await supabase.auth.getUser();
+  const { data: prof } = await supabase.from('profiles').select('role').eq('id', u?.user?.id).single();
+  if (prof?.role !== 'owner') throw new Error('Only an owner can approve a payment.');
+  const { error } = await supabase.from('payments')
+    .update({ approved_at: new Date().toISOString(), approved_by: u.user.id })
+    .eq('id', id);
+  if (error) throw error;
+}
+export async function unapprovePayment(id) {
+  const { data: u } = await supabase.auth.getUser();
+  const { data: prof } = await supabase.from('profiles').select('role').eq('id', u?.user?.id).single();
+  if (prof?.role !== 'owner') throw new Error('Only an owner can revoke approval.');
+  const { error } = await supabase.from('payments')
+    .update({ approved_at: null, approved_by: null }).eq('id', id);
+  if (error) throw error;
 }
 
 export async function setPaymentStatus(id, status) {
