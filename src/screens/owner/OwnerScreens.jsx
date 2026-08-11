@@ -42,7 +42,10 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
             </div>
             <div style={{ margin: '16px 0 8px' }}><ProgressBar pct={p.progress} green={p.progress === 100} /></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span className="meta">{p.progress}% complete</span>
+              <span className="meta">
+                {p.progress}% complete
+                {p.creator_name && <> · by <b style={{ color: 'var(--fg-2)' }}>{p.creator_name}</b></>}
+              </span>
               <span className="meta" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Open <Icon name="chevron-right" size={13} /></span>
             </div>
           </div>
@@ -528,16 +531,13 @@ export function UsersScreen({ users = INH_DATA.users, onInvite, onChangeRole, on
         <div className="inh-hero" style={{ padding: 18, marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <div>
-              <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 30, lineHeight: 1 }}>{internal} <span style={{ color: 'var(--on-dark-2)', fontSize: 16 }}>/ 20</span></div>
+              <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 30, lineHeight: 1 }}>{internal}</div>
               <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginTop: 5 }}>Internal users (owner / admin)</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div className="inh-figure" style={{ color: 'var(--on-dark)', fontSize: 17 }}>{count}</div>
               <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{t('registered')}</div>
             </div>
-          </div>
-          <div style={{ height: 7, background: 'rgba(255,255,255,.16)', borderRadius: 5, marginTop: 12, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: Math.min(100, (internal / 20) * 100) + '%', background: internal >= 20 ? 'var(--warning)' : 'var(--inh-lime)' }} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, color: 'var(--on-dark-2)', fontSize: 12 }}>
@@ -856,7 +856,6 @@ function fmtBytes(b) {
 }
 
 export function PlanScreen({ users = [], projects = [], storageBytes = 0 }) {
-  const INTERNAL_LIMIT = 20;
   const STORAGE_LIMIT = 10 * GB;
   const internal = users.filter(u => u.role === 'owner' || u.role === 'admin').length;
   const homeowners = users.filter(u => u.role === 'homeowner').length;
@@ -894,7 +893,7 @@ export function PlanScreen({ users = [], projects = [], storageBytes = 0 }) {
         <div>
           <div className="inh-section">Usage</div>
           <div className="inh-card" style={{ overflow: 'hidden' }}>
-            <UsageRow icon="shield-check" label="Internal users" sub="Owner / Admin / Staff" value={`${internal} / ${INTERNAL_LIMIT}`} warn={internal >= INTERNAL_LIMIT} />
+            <UsageRow icon="shield-check" label="Internal users" sub="Owner / Admin / Staff" value={`${internal}`} />
             <UsageRow icon="users" label="Homeowner accounts" sub="Unlimited" value={`${homeowners}`} />
             <UsageRow icon="building" label="Active projects" sub="Unlimited" value={`${projects.length}`} />
           </div>

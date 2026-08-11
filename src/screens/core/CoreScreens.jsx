@@ -113,16 +113,29 @@ function FinanceCard({ project, onUpdateFinance }) {
   const [editQuot, setEditQuot] = useState(false);
   const [quotVal, setQuotVal] = useState(String(quotation || ''));
   const [rec, setRec] = useState({ amount: '', date: '', note: '' });
+  const [saveErr, setSaveErr] = useState(null);
   if (!canEdit && quotation === 0 && received.length === 0) return null;
 
-  const saveQuot = () => { onUpdateFinance({ quotation: Number(quotVal) || 0 }); setEditQuot(false); };
-  const addRec = () => {
+  // onUpdateFinance may return { ok, error } — surface any error so the user
+  // learns the save failed instead of watching the value silently revert.
+  const persist = async (patch) => {
+    setSaveErr(null);
+    const res = await Promise.resolve(onUpdateFinance(patch));
+    if (res && res.ok === false) setSaveErr(res.error || 'Could not save.');
+    return res;
+  };
+  const saveQuot = async () => {
+    const res = await persist({ quotation: Number(quotVal) || 0 });
+    if (!res || res.ok !== false) setEditQuot(false);
+  };
+  const addRec = async () => {
     const amt = Number(rec.amount);
     if (!amt) return;
-    onUpdateFinance({ received_payments: [...received, { id: `${received.length}-${amt}`, amount: amt, date: rec.date || '', note: (rec.note || '').trim() }] });
-    setRec({ amount: '', date: '', note: '' });
+    const next = [...received, { id: `${received.length}-${amt}`, amount: amt, date: rec.date || '', note: (rec.note || '').trim() }];
+    const res = await persist({ received_payments: next });
+    if (!res || res.ok !== false) setRec({ amount: '', date: '', note: '' });
   };
-  const removeRec = (i) => onUpdateFinance({ received_payments: received.filter((_, idx) => idx !== i) });
+  const removeRec = (i) => persist({ received_payments: received.filter((_, idx) => idx !== i) });
   const fmtDate = (iso) => (iso ? new Date(String(iso).slice(0, 10) + 'T00:00:00').toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }) : '');
   const inS = { border: '1px solid var(--border-strong)', borderRadius: 10, padding: '8px 11px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' };
 
@@ -165,6 +178,11 @@ function FinanceCard({ project, onUpdateFinance }) {
             <input type="date" value={rec.date} onChange={e => setRec(s => ({ ...s, date: e.target.value }))} style={{ ...inS, width: 150 }} />
             <input value={rec.note} onChange={e => setRec(s => ({ ...s, note: e.target.value }))} placeholder="Note (e.g. deposit)" style={{ ...inS, flex: 1, minWidth: 120 }} />
             <button onClick={addRec} disabled={!Number(rec.amount)} style={{ border: 'none', background: Number(rec.amount) ? 'var(--inh-lime)' : 'var(--surface-2)', color: 'var(--inh-charcoal)', borderRadius: 10, padding: '0 16px', fontWeight: 700, fontSize: 13, cursor: Number(rec.amount) ? 'pointer' : 'default' }}>Add</button>
+          </div>
+        )}
+        {saveErr && (
+          <div style={{ marginTop: 10, padding: '8px 11px', background: '#fdecec', border: '1px solid var(--error)', borderRadius: 8, color: 'var(--error)', fontSize: 12.5, fontWeight: 600 }}>
+            {saveErr}
           </div>
         )}
       </SectionCard>
@@ -306,7 +324,7 @@ function NotesCard({ role, notes, onAddNote, noteDraft, setNoteDraft }) {
   );
 }
 
-export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, updates = INH_DATA.updates, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onOpenPhoto, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onUploadDoc, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
+export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedule = INH_DATA.thisWeek, updates = INH_DATA.updates, documents, onEditProgress, onEditProject, onAddSchedule, onAddPhase, onMarkPhaseComplete, onAddItem, onItemPhoto, onAddSchedulePhoto, onPhasePhoto, onOpenPhoto, onUploadStageDoc, onOpenDoc, onToggleScheduleDone, onTogglePhaseTask, onOpenTask, onMovePhase, onMoveTask, onDeleteSchedule, onDeletePhase, onDeleteItem, onManageAccess, onOpenDocs, onUploadDoc, onReport, onSetStage, onUpdateStageItems, onUpdateFinance, notes, onAddNote }) {
   const [open, setOpen] = useState(2);
   const [noteDraft, setNoteDraft] = useState('');
   const [stageItemDraft, setStageItemDraft] = useState('');
@@ -439,7 +457,11 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                   const curLabel = STAGES[cur][1].replace(/^\S+\s/, '');
                   const sItems = (project?.stage_items && project.stage_items[curKey]) || [];
                   const ed = CAN_EDIT(role) && onUpdateStageItems;
-                  if (!ed && sItems.length === 0) return null;
+                  // Don't early-return if we have stage-docs to show for a
+                  // read-only viewer (homeowner) — the docs sub-section still
+                  // needs to render even when the task list is empty.
+                  const stageDocsCount = (documents || []).filter(d => (d.stage || '').toLowerCase() === curKey).length;
+                  if (!ed && sItems.length === 0 && stageDocsCount === 0) return null;
                   const toggle = (i) => onUpdateStageItems(curKey, sItems.map((it, idx) => (idx === i ? { ...it, done: !it.done } : it)));
                   const remove = (i) => onUpdateStageItems(curKey, sItems.filter((_, idx) => idx !== i));
                   const add = () => { const tx = stageItemDraft.trim(); if (!tx) return; onUpdateStageItems(curKey, [...sItems, { id: `${sItems.length}-${tx.slice(0, 5)}`, title: tx, done: false }]); setStageItemDraft(''); };
@@ -467,6 +489,46 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                           </button>
                         </div>
                       )}
+
+                      {/* Documents attached to THIS stage. Filter by
+                          document.stage matching the current stage key
+                          (measure / quotation / contract / deposit).
+                          Staff (CAN_EDIT) get an inline "Upload document"
+                          link that pre-tags the upload with this stage. */}
+                      {(() => {
+                        const stageDocs = (documents || []).filter(d => (d.stage || '').toLowerCase() === curKey);
+                        const staffCanUpload = CAN_EDIT(role) && onUploadStageDoc;
+                        if (stageDocs.length === 0 && !staffCanUpload) return null;
+                        return (
+                          <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
+                            <div className="inh-row__sub" style={{ fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Icon name="file-text" size={13} color="var(--fg-2)" />
+                                {curLabel} documents
+                                {stageDocs.length > 0 && <span style={{ background: 'var(--surface-2)', color: 'var(--fg-2)', fontSize: 10.5, fontWeight: 800, padding: '1px 7px', borderRadius: 999 }}>{stageDocs.length}</span>}
+                              </span>
+                              {staffCanUpload && (
+                                <button onClick={() => onUploadStageDoc(curKey)} className="inh-link" style={{ fontSize: 12.5 }}>+ Upload document</button>
+                              )}
+                            </div>
+                            {stageDocs.length === 0 ? (
+                              <div className="meta">No documents attached to this stage yet.</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {stageDocs.map(d => (
+                                  <div key={d.id} onClick={() => onOpenDoc && d.ready && onOpenDoc(d)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 8, cursor: onOpenDoc && d.ready ? 'pointer' : 'default', background: 'var(--surface)' }}>
+                                    <Icon name={d.kind === 'invoice' ? 'banknote' : d.kind === 'plan' ? 'map-pin' : 'file-text'} size={14} color="var(--fg-2)" />
+                                    <span style={{ flex: 1, fontSize: 13, color: 'var(--fg-1)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                                    <span className="meta" style={{ fontSize: 11 }}>{d.meta || ''}</span>
+                                    {onOpenDoc && d.ready && <Icon name="chevron-right" size={14} color="var(--fg-3)" />}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

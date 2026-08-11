@@ -423,6 +423,9 @@ export async function listDocuments(projectId) {
   const kindLabel = { invoice: 'PDF', plan: 'PDF', doc: 'PDF' };
   return (data || []).map(doc => ({
     id: doc.id, name: doc.name, kind: doc.kind, ready: doc.ready, storage_path: doc.storage_path,
+    stage: doc.stage || null,
+    file_size: doc.file_size,
+    issued_on: doc.issued_on,
     meta: doc.ready
       ? [kindLabel[doc.kind], fmtSize(doc.file_size), fmtDate(doc.issued_on)].filter(Boolean).join(' · ')
       : 'Available after handover',
@@ -430,7 +433,10 @@ export async function listDocuments(projectId) {
 }
 
 // Upload a document file and register it. Path: <project_id>/<ts>-<file>.
-export async function uploadDocument(projectId, file, { name, kind = 'doc' } = {}) {
+// Pass `stage` (measure / quotation / contract / deposit) to tag the doc so
+// the Client Status card can list it under that stage. Leave stage undefined
+// for a project-wide document that only shows in the Documents tab.
+export async function uploadDocument(projectId, file, { name, kind = 'doc', stage = null } = {}) {
   const safe = file.name.replace(/[^\w.\-]+/g, '_');
   const path = `${projectId}/${Date.now()}-${safe}`;
   const { error: ue } = await supabase.storage.from('documents').upload(path, file, { upsert: false });
@@ -439,6 +445,7 @@ export async function uploadDocument(projectId, file, { name, kind = 'doc' } = {
     project_id: projectId, name: name || file.name, kind,
     file_size: file.size, storage_path: path, ready: true,
     issued_on: new Date().toISOString().slice(0, 10),
+    stage: stage || null,
   });
   if (error) throw error;
 }

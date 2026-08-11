@@ -682,23 +682,28 @@ function TemplateScreen({ template, onSave }) {
   );
 }
 
-function UploadDocSheet({ onClose, onSave }) {
+function UploadDocSheet({ onClose, onSave, stage = null }) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState('doc');
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const kinds = [['doc', 'Document'], ['invoice', 'Invoice'], ['plan', 'Plan']];
+  const stageLabel = stage ? stage.charAt(0).toUpperCase() + stage.slice(1) : null;
   const save = async () => {
     if (!file) return;
     setBusy(true); setErr(null);
-    try { await onSave(file, { name: name.trim() || file.name, kind }); onClose(); }
+    try { await onSave(file, { name: name.trim() || file.name, kind, stage: stage || null }); onClose(); }
     catch (e) { setErr(e?.message || 'Upload failed'); }
     finally { setBusy(false); }
   };
   return (
-    <Sheet title="Upload document" onClose={onClose}>
-      <p className="body-2" style={{ marginBottom: 14 }}>Add a file to this project. Members can view it; only INH staff can upload.</p>
+    <Sheet title={stageLabel ? `Upload ${stageLabel} document` : 'Upload document'} onClose={onClose}>
+      <p className="body-2" style={{ marginBottom: 14 }}>
+        {stageLabel
+          ? `The file will be tagged to the ${stageLabel} stage and appear both on Client Status and in the Documents tab.`
+          : 'Add a file to this project. Members can view it; only INH staff can upload.'}
+      </p>
       <Field label="Display name" icon="file-text" value={name} onChange={setName} placeholder="e.g. Milestone 3 Invoice" autoFocus />
       <label className="inh-label" style={{ marginTop: 14 }}>Type</label>
       <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
@@ -1128,15 +1133,8 @@ export default function App() {
     await reloadTop();
   };
 
-  const internalCount = () => users.filter(u => u.role === 'owner' || u.role === 'admin').length;
-
   const handleChangeRole = async (userId, role) => {
     if (!IS_LIVE) return;
-    if (role === 'owner' || role === 'admin') {
-      const u = users.find(x => x.id === userId);
-      const alreadyInternal = u && (u.role === 'owner' || u.role === 'admin');
-      if (!alreadyInternal && internalCount() >= 20) throw new Error('Internal user limit reached (max 20 owner/admin).');
-    }
     await api.setUserRole(userId, role);
     await reloadTop();
   };
@@ -1178,9 +1176,6 @@ export default function App() {
 
   const handleAddAccount = async ({ email, login, password, fullName, role }) => {
     if (!IS_LIVE) return;
-    if ((role === 'owner' || role === 'admin') && internalCount() >= 20) {
-      throw new Error('Internal user limit reached (max 20 owner/admin).');
-    }
     const res = await api.adminCreateUser({ email, password, fullName, role });
     // Store the login + temp password (owner-visible) so it can be looked up
     // later. Don't fail the whole flow if this can't be saved.
@@ -1369,13 +1364,26 @@ export default function App() {
 
   const handleUpdateFinance = async (patch) => {
     const id = activeProject?.id;
-    if (!id) return;
+    if (!id) return { ok: false, error: 'No project open.' };
     setStack(s => s.map((e, idx) => (idx === s.length - 1 && e.project ? { ...e, project: { ...e.project, ...patch } } : e)));
     setProjects(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)));
-    if (!IS_LIVE) return;
-    // As above — don't reload; the DB will echo back the same values we just
-    // wrote, and if the write fails the catch keeps the optimistic state.
-    try { await api.updateProject(id, patch); } catch (e) { /* keep optimistic */ }
+    if (!IS_LIVE) return { ok: true };
+    try {
+      await api.updateProject(id, patch);
+      return { ok: true };
+    } catch (e) {
+      // Surface the error so FinanceCard can show it. Most common cause:
+      // migration 0020 hasn't been applied yet, so the quotation /
+      // received_payments columns don't exist on the DB.
+      const raw = String(e?.message || '');
+      const missingCol = /column.*(quotation|received_payments).*does not exist|schema cache/i.test(raw);
+      return {
+        ok: false,
+        error: missingCol
+          ? 'Save failed — the quotation column is missing on the database. Run migration 0020_project_finance.sql in Supabase, then try again.'
+          : (raw || 'Could not save. Please try again.'),
+      };
+    }
   };
 
   const handleUpdateStageItems = async (stage, items) => {
@@ -1616,6 +1624,9 @@ export default function App() {
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onUploadDoc={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null}
+          documents={live(detail?.documents)}
+          onOpenDoc={handleOpenDoc}
+          onUploadStageDoc={CAN_EDIT(role) ? (stage) => setSheet({ kind: 'uploadStageDoc', stage }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
@@ -1683,6 +1694,9 @@ export default function App() {
           onManageAccess={role === 'owner' ? () => push({ type: 'team', project: activeProject }) : null}
           onOpenDocs={CAN_EDIT(role) ? () => push({ type: 'documents', project: activeProject }) : null}
           onUploadDoc={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null}
+          documents={live(detail?.documents)}
+          onOpenDoc={handleOpenDoc}
+          onUploadStageDoc={CAN_EDIT(role) ? (stage) => setSheet({ kind: 'uploadStageDoc', stage }) : null}
           onReport={handleReport}
           onSetStage={CAN_EDIT(role) ? handleSetStage : null}
           onUpdateStageItems={CAN_EDIT(role) ? handleUpdateStageItems : null}
@@ -1693,7 +1707,7 @@ export default function App() {
       }
       return <ProjectsScreen role={role} projects={IS_LIVE ? projects : undefined}
         onOpenProject={p => push({ type: 'overview', project: p })}
-        onAddProject={role === 'owner' ? () => setSheet('addProject') : null}
+        onAddProject={CAN_EDIT(role) ? () => setSheet('addProject') : null}
         onDeleteProject={role === 'owner' ? handleDeleteProject : null} />;
     }
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
@@ -1737,6 +1751,7 @@ export default function App() {
       {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onCreate={handleAddProject} onAddItems={handleAddProjectItems} suggestedCode={nextProjectCode} template={template} />}
       {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
+      {typeof sheet === 'object' && sheet?.kind === 'uploadStageDoc' && <UploadDocSheet stage={sheet.stage} onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {sheet === 'addSchedule' && <AddScheduleSheet onClose={() => setSheet(null)} onSave={handleAddSchedule} />}
       {sheet === 'addPhase' && <AddPhaseSheet onClose={() => setSheet(null)} onSave={handleAddPhase} />}
       {sheet === 'progress' && <ProgressSheet project={activeProject} onClose={() => setSheet(null)} onSave={pct => handleUpdateProgress(activeProject.id, pct)} />}
