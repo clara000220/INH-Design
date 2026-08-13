@@ -182,26 +182,65 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
         <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
-        <Field label={amountLocked ? 'Amount (RM) — locked' : 'Amount (RM)'} icon="banknote" type="number" value={f.amount} onChange={amountLocked ? (() => {}) : set('amount')} placeholder="e.g. 14200" />
+        <Field label={amountLocked ? 'Total amount (RM) — locked' : 'Total amount (RM)'} icon="banknote" type="number" value={f.amount} onChange={amountLocked ? (() => {}) : set('amount')} placeholder="e.g. 14200" />
+
+        {/* Payment breakdown — one line per stage of work with its own amount
+            and release status, so a single contractor row can carry e.g.
+            "Wiring 20,000" + "Drafting 30,000" and each can move
+            pending → released independently. */}
         <div>
-          <label className="inh-label">Items / breakdown (optional)</label>
+          <label className="inh-label">Payment breakdown (optional — split by stage)</label>
+          {items.length === 0 && (
+            <p className="meta" style={{ marginTop: -2, marginBottom: 8 }}>
+              Break the total into stages of work (e.g. Wiring, Drafting) so you can release each part when it's done.
+            </p>
+          )}
           {items.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
-              {items.map((it, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="e.g. Main cable"
-                    style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
-                  <input value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="RM" type="number"
-                    style={{ width: 82, border: '1px solid var(--border)', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
-                  <button onClick={() => removeItem(i)} aria-label="Remove item" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+              {items.map((it, i) => {
+                const st = it.status || 'pending';
+                const stCycle = { pending: 'released', released: 'hold', hold: 'pending' };
+                return (
+                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 999, background: 'var(--surface-2)', color: 'var(--fg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
+                      <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage (e.g. Wiring)"
+                        style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
+                      <button onClick={() => removeItem(i)} aria-label="Remove stage" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--fg-3)', fontWeight: 600 }}>RM</span>
+                        <input value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
+                          style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px 8px 34px', fontSize: 13.5, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', fontWeight: 700 }} />
+                      </div>
+                      {canSetStatus ? (
+                        <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change stage status"
+                          style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0 }}>
+                          <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                        </button>
+                      ) : (
+                        <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Live total row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', fontSize: 13 }}>
+                <span className="meta">Breakdown total</span>
+                <span className="inh-figure" style={{ fontSize: 15 }}>{rm(itemsTotal)}</span>
+              </div>
+              {itemsTotal > 0 && Number(f.amount) !== itemsTotal && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', padding: '0 10px' }}>
+                  <Icon name="alert-triangle" size={13} color="var(--warning)" />
+                  Total ({rm(Number(f.amount) || 0)}) doesn't match the breakdown ({rm(itemsTotal)}).
+                  <button onClick={() => set('amount')(String(itemsTotal))} className="inh-link" style={{ fontSize: 12 }}>Use breakdown total</button>
                 </div>
-              ))}
+              )}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <button onClick={addItem} className="inh-link" style={{ fontSize: 12.5 }}>+ Add item</button>
-            {items.length > 0 && <button onClick={() => set('amount')(String(itemsTotal))} className="inh-link" style={{ fontSize: 12.5 }}>Use total ({rm(itemsTotal)})</button>}
-          </div>
+          <button onClick={addItem} className="inh-link" style={{ fontSize: 13, fontWeight: 600 }}>+ Add another stage</button>
         </div>
         <div>
           <label className="inh-label">Method</label>
