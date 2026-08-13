@@ -1,5 +1,5 @@
 /* INH — owner/admin screens: Projects, Fees, FeesDetail, Users, Team, More */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../../components/Icon.jsx';
 import { Btn, Pill, ProgressBar, Avatar, RoleBadge, Dialog, Sheet } from '../../components/primitives.jsx';
 import { Field } from '../auth/Auth.jsx';
@@ -140,15 +140,42 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
   });
   // Seed one blank stage row when creating a new payment so the user can
   // start typing immediately — no "+ Add" click needed for the common case.
+  // Stages carry their own date + method + note now so the owner can log
+  // "wiring paid by DuitNow on 12 Aug, deposit paid by bank transfer on
+  // 20 Aug" in a single payment record.
+  const emptyStage = { title: '', amount: '', status: 'pending', date: '', method: '', note: '' };
   const [items, setItems] = useState(
     pay?.items?.length
-      ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '', status: it.status || 'pending' }))
-      : (pay ? [] : [{ title: '', amount: '', status: 'pending' }])
+      ? pay.items.map(it => ({
+          title: it.title || '',
+          amount: it.amount != null ? String(it.amount) : '',
+          status: it.status || 'pending',
+          date: it.date ? String(it.date).slice(0, 10) : '',
+          method: it.method || '',
+          note: it.note || '',
+        }))
+      : (pay ? [] : [{ ...emptyStage }])
   );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // Snapshot the initial values so we can tell "user typed something" vs
+  // "user just opened the sheet". Used to decide whether closing needs
+  // a discard-changes confirmation.
+  const initialRef = useRef({ f, items });
+  const isDirty = () => {
+    const a = initialRef.current;
+    if (JSON.stringify(a.f) !== JSON.stringify(f)) return true;
+    if (JSON.stringify(a.items) !== JSON.stringify(items)) return true;
+    return false;
+  };
+  const requestClose = () => {
+    if (busy) return;
+    if (isDirty()) { setConfirmDiscard(true); return; }
+    onClose();
+  };
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
-  const addItem = () => setItems(s => [...s, { title: '', amount: '', status: 'pending' }]);
+  const addItem = () => setItems(s => [...s, { ...emptyStage }]);
   const setItem = (i, k, v) => setItems(s => s.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeItem = (i) => setItems(s => s.filter((_, idx) => idx !== i));
   const itemsTotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
@@ -166,15 +193,30 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
     setBusy(true); setErr(null);
     // Only keep stages that have an amount (title can be blank — "Stage 1").
     const cleanItems = items
-      .map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0, status: it.status || 'pending' }))
+      .map(it => ({
+        title: it.title.trim(),
+        amount: Number(it.amount) || 0,
+        status: it.status || 'pending',
+        date: it.date || '',
+        method: it.method || '',
+        note: (it.note || '').trim(),
+      }))
       .filter(it => it.amount > 0);
     try {
-      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: derivedAmount, method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
+      // Derive top-level method + due_date from the first stage that has
+      // one, so downstream reports (which read payment.method / due_date)
+      // still get a sensible value for stage-based payments.
+      const firstMethod = cleanItems.find(it => it.method)?.method || f.method || 'Bank transfer';
+      const firstDate = cleanItems.find(it => it.date)?.date || f.due_date || '';
+      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: derivedAmount, method: firstMethod, due_date: firstDate, status: f.status, items: cleanItems });
       if (thenReset) {
         // Keep the contractor + stage + method — the point of "add another" is
         // logging a second progress payment to the same person quickly.
-        setF(s => ({ ...s, amount: '', due_date: '', status: canSetStatus ? 'pending' : 'pending' }));
-        setItems([{ title: '', amount: '', status: 'pending' }]);
+        const nextF = { ...f, amount: '', due_date: '', status: canSetStatus ? 'pending' : 'pending' };
+        const nextItems = [{ ...emptyStage }];
+        setF(nextF); setItems(nextItems);
+        // Re-baseline so the discard guard doesn't flag the fresh form.
+        initialRef.current = { f: nextF, items: nextItems };
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 1600);
       } else {
@@ -186,7 +228,8 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
   const save = () => doSave(false);
   const saveAndAdd = () => doSave(true);
   return (
-    <Sheet title={pay ? 'Edit payment' : 'Add payment'} onClose={onClose}>
+    <>
+    <Sheet title={pay ? 'Edit payment' : 'Add payment'} onClose={requestClose}>
       {approvedAt && (
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'var(--success-tint)', border: '1px solid var(--success)', borderRadius: 10, marginBottom: 12 }}>
           <Icon name="shield-check" size={18} color="var(--success)" />
@@ -212,37 +255,70 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
           <p className="meta" style={{ marginTop: -2, marginBottom: 10 }}>
             List each stage of the work with its amount. Tap the status pill to release each stage as it completes.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
             {items.map((it, i) => {
               const st = it.status || 'pending';
               const stCycle = { pending: 'released', released: 'hold', hold: 'pending' };
               const isLast = i === items.length - 1;
+              const methods = ['Bank transfer', 'DuitNow', 'Cash'];
+              const inS = { border: '1px solid var(--border)', borderRadius: 9, padding: '9px 11px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' };
               return (
-                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <div style={{ width: 20, textAlign: 'center', fontSize: 11.5, fontWeight: 800, color: 'var(--fg-3)', flexShrink: 0 }}>{i + 1}</div>
-                  <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage name"
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const amt = document.querySelector(`input[data-amt-idx="${i}"]`); amt && amt.focus(); } }}
-                    disabled={amountLocked}
-                    style={{ flex: 1.3, minWidth: 0, border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' }} />
-                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                    <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
-                    <input data-amt-idx={i} value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
-                      onKeyDown={e => { if (e.key === 'Enter' && Number(it.amount) > 0) { e.preventDefault(); if (isLast) { addItem(); setTimeout(() => { const next = document.querySelector(`input[placeholder="Stage name"]:nth-of-type(${i + 2})`); next && next.focus(); }, 30); } } }}
+                <div key={i} style={{ border: '1px solid var(--border-strong)', borderRadius: 14, padding: 12, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+                  {/* Top row: # + stage name + status pill + × */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 999, background: 'var(--inh-lime-tint)', color: 'var(--inh-charcoal)', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                    <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage name (e.g. Wiring)"
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const amt = document.querySelector(`input[data-amt-idx="${i}"]`); amt && amt.focus(); } }}
                       disabled={amountLocked}
-                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 8px 9px 32px', fontSize: 13.5, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', fontWeight: 700, background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' }} />
-                  </div>
-                  {canSetStatus ? (
-                    <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change status"
-                      style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0 }}>
+                      style={{ ...inS, flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700 }} />
+                    {canSetStatus ? (
+                      <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change status"
+                        style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0 }}>
+                        <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                      </button>
+                    ) : (
                       <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                    )}
+                    <button onClick={() => (items.length > 1 ? removeItem(i) : (setItem(i, 'title', ''), setItem(i, 'amount', '')))} aria-label="Remove stage" disabled={amountLocked}
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}>
+                      <Icon name="x" size={15} color="var(--fg-3)" />
                     </button>
-                  ) : (
-                    <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
-                  )}
-                  <button onClick={() => (items.length > 1 ? removeItem(i) : setItem(i, 'title', '') || setItem(i, 'amount', ''))} aria-label="Remove stage" disabled={amountLocked}
-                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}>
-                    <Icon name="x" size={14} color="var(--fg-3)" />
-                  </button>
+                  </div>
+
+                  {/* Amount row — big, prominent */}
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
+                    <input data-amt-idx={i} value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
+                      onKeyDown={e => { if (e.key === 'Enter' && Number(it.amount) > 0) { e.preventDefault(); if (isLast) { addItem(); setTimeout(() => { const next = document.querySelector(`input[placeholder="Stage name (e.g. Wiring)"]:nth-of-type(${i + 2})`); next && next.focus(); }, 30); } } }}
+                      disabled={amountLocked}
+                      style={{ ...inS, width: '100%', padding: '10px 12px 10px 38px', fontSize: 16, fontWeight: 800 }} />
+                  </div>
+
+                  {/* Date + method row */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 140px', minWidth: 130 }}>
+                      <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Paid on</div>
+                      <input type="date" value={it.date || ''} onChange={e => setItem(i, 'date', e.target.value)} disabled={amountLocked}
+                        style={{ ...inS, width: '100%' }} />
+                    </div>
+                    <div style={{ flex: '2 1 200px', minWidth: 200 }}>
+                      <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Method</div>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        {methods.map(m => (
+                          <button key={m} onClick={() => setItem(i, 'method', it.method === m ? '' : m)} disabled={amountLocked}
+                            className={'inh-chip' + (it.method === m ? ' active' : '')}
+                            style={{ flex: 1, fontSize: 12, padding: '7px 6px', whiteSpace: 'nowrap' }}>{m}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Note row */}
+                  <div>
+                    <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Note (optional)</div>
+                    <input value={it.note || ''} onChange={e => setItem(i, 'note', e.target.value)} placeholder="e.g. ref no, invoice #, milestone" disabled={amountLocked}
+                      style={{ ...inS, width: '100%' }} />
+                  </div>
                 </div>
               );
             })}
@@ -253,15 +329,10 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
             </button>
           )}
         </div>
-        <div>
-          <label className="inh-label">Method</label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {['Bank transfer', 'DuitNow', 'Cash'].map(m => (
-              <button key={m} onClick={() => set('method')(m)} className={'inh-chip' + (f.method === m ? ' active' : '')} style={{ flex: 1 }}>{m}</button>
-            ))}
-          </div>
-        </div>
-        <Field label="Due date" icon="calendar" type="date" value={f.due_date} onChange={set('due_date')} placeholder="" />
+        {/* Top-level Method + Due date removed — each stage carries its own
+            paid-on date + method now, so these were duplicated. Payment.method
+            and payment.due_date are still written on save (from the first
+            stage's values) so downstream code that reads them keeps working. */}
         {canSetStatus ? (
           <div>
             <label className="inh-label">Status</label>
@@ -301,6 +372,20 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
         )}
       </div>
     </Sheet>
+    {confirmDiscard && (
+      <Dialog onClose={() => setConfirmDiscard(false)}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--warning-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="alert-triangle" size={26} color="var(--warning)" />
+        </div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Discard your changes?</div>
+        <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>You've typed something that hasn't been saved yet. Close without saving?</p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Btn variant="ghost" onClick={() => setConfirmDiscard(false)}>Keep editing</Btn>
+          <Btn variant="danger" onClick={() => { setConfirmDiscard(false); onClose(); }}>Discard</Btn>
+        </div>
+      </Dialog>
+    )}
+    </>
   );
 }
 
