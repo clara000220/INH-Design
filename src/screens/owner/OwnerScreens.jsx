@@ -138,7 +138,13 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
     due_date: pay?.due_date ? String(pay.due_date).slice(0, 10) : '',
     status: canSetStatus ? (pay?.status || 'pending') : 'pending',
   });
-  const [items, setItems] = useState(pay?.items?.length ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '', status: it.status || 'pending' })) : []);
+  // Seed one blank stage row when creating a new payment so the user can
+  // start typing immediately — no "+ Add" click needed for the common case.
+  const [items, setItems] = useState(
+    pay?.items?.length
+      ? pay.items.map(it => ({ title: it.title || '', amount: it.amount != null ? String(it.amount) : '', status: it.status || 'pending' }))
+      : (pay ? [] : [{ title: '', amount: '', status: 'pending' }])
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
@@ -146,19 +152,29 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
   const setItem = (i, k, v) => setItems(s => s.map((it, idx) => (idx === i ? { ...it, [k]: v } : it)));
   const removeItem = (i) => setItems(s => s.filter((_, idx) => idx !== i));
   const itemsTotal = items.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
-  const ready = f.contractor.trim() && f.amount !== '' && !isNaN(Number(f.amount));
+  // Total is derived: if any stages have amounts, use their sum; otherwise
+  // fall back to the legacy top-level amount (edit-mode compat for older rows
+  // that never used the breakdown).
+  const derivedAmount = itemsTotal > 0 ? itemsTotal : Number(f.amount) || 0;
+  // Ready to save when there's a contractor AND at least one stage row has
+  // a non-zero amount (OR an existing legacy amount on an edit).
+  const hasAmount = itemsTotal > 0 || (Number(f.amount) || 0) > 0;
+  const ready = f.contractor.trim() && hasAmount;
   const [savedFlash, setSavedFlash] = useState(false);
   const doSave = async (thenReset) => {
     if (!ready) return;
     setBusy(true); setErr(null);
-    const cleanItems = items.map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0, status: it.status || 'pending' })).filter(it => it.title);
+    // Only keep stages that have an amount (title can be blank — "Stage 1").
+    const cleanItems = items
+      .map(it => ({ title: it.title.trim(), amount: Number(it.amount) || 0, status: it.status || 'pending' }))
+      .filter(it => it.amount > 0);
     try {
-      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: Number(f.amount), method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
+      await onSave({ contractor: f.contractor.trim(), stage: f.stage.trim(), amount: derivedAmount, method: f.method, due_date: f.due_date, status: f.status, items: cleanItems });
       if (thenReset) {
         // Keep the contractor + stage + method — the point of "add another" is
         // logging a second progress payment to the same person quickly.
         setF(s => ({ ...s, amount: '', due_date: '', status: canSetStatus ? 'pending' : 'pending' }));
-        setItems([]);
+        setItems([{ title: '', amount: '', status: 'pending' }]);
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 1600);
       } else {
@@ -182,65 +198,60 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
         <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
-        <Field label={amountLocked ? 'Total amount (RM) — locked' : 'Total amount (RM)'} icon="banknote" type="number" value={f.amount} onChange={amountLocked ? (() => {}) : set('amount')} placeholder="e.g. 14200" />
-
-        {/* Payment breakdown — one line per stage of work with its own amount
-            and release status, so a single contractor row can carry e.g.
-            "Wiring 20,000" + "Drafting 30,000" and each can move
-            pending → released independently. */}
+        {/* Payment breakdown — one row per stage of work. The total is
+            auto-summed at the top and used as the payment's amount on save,
+            so there's no separate "Total amount" input to keep in sync. */}
         <div>
-          <label className="inh-label">Payment breakdown (optional — split by stage)</label>
-          {items.length === 0 && (
-            <p className="meta" style={{ marginTop: -2, marginBottom: 8 }}>
-              Break the total into stages of work (e.g. Wiring, Drafting) so you can release each part when it's done.
-            </p>
-          )}
-          {items.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-              {items.map((it, i) => {
-                const st = it.status || 'pending';
-                const stCycle = { pending: 'released', released: 'hold', hold: 'pending' };
-                return (
-                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 10, background: 'var(--surface)' }}>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ width: 22, height: 22, borderRadius: 999, background: 'var(--surface-2)', color: 'var(--fg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0 }}>{i + 1}</div>
-                      <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage (e.g. Wiring)"
-                        style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box' }} />
-                      <button onClick={() => removeItem(i)} aria-label="Remove stage" style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}><Icon name="x" size={14} color="var(--fg-3)" /></button>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <div style={{ position: 'relative', flex: 1 }}>
-                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--fg-3)', fontWeight: 600 }}>RM</span>
-                        <input value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
-                          style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px 8px 34px', fontSize: 13.5, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', fontWeight: 700 }} />
-                      </div>
-                      {canSetStatus ? (
-                        <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change stage status"
-                          style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0 }}>
-                          <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
-                        </button>
-                      ) : (
-                        <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Live total row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', fontSize: 13 }}>
-                <span className="meta">Breakdown total</span>
-                <span className="inh-figure" style={{ fontSize: 15 }}>{rm(itemsTotal)}</span>
-              </div>
-              {itemsTotal > 0 && Number(f.amount) !== itemsTotal && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--warning)', padding: '0 10px' }}>
-                  <Icon name="alert-triangle" size={13} color="var(--warning)" />
-                  Total ({rm(Number(f.amount) || 0)}) doesn't match the breakdown ({rm(itemsTotal)}).
-                  <button onClick={() => set('amount')(String(itemsTotal))} className="inh-link" style={{ fontSize: 12 }}>Use breakdown total</button>
-                </div>
-              )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 6 }}>
+            <label className="inh-label" style={{ margin: 0 }}>Stages of work</label>
+            <div style={{ textAlign: 'right' }}>
+              <div className="meta" style={{ fontSize: 10.5 }}>TOTAL</div>
+              <div className="inh-figure" style={{ fontSize: 18, color: amountLocked ? 'var(--fg-3)' : 'var(--fg-1)' }}>{rm(itemsTotal)}{amountLocked && ' 🔒'}</div>
             </div>
+          </div>
+          <p className="meta" style={{ marginTop: -2, marginBottom: 10 }}>
+            List each stage of the work with its amount. Tap the status pill to release each stage as it completes.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+            {items.map((it, i) => {
+              const st = it.status || 'pending';
+              const stCycle = { pending: 'released', released: 'hold', hold: 'pending' };
+              const isLast = i === items.length - 1;
+              return (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div style={{ width: 20, textAlign: 'center', fontSize: 11.5, fontWeight: 800, color: 'var(--fg-3)', flexShrink: 0 }}>{i + 1}</div>
+                  <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage name"
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const amt = document.querySelector(`input[data-amt-idx="${i}"]`); amt && amt.focus(); } }}
+                    disabled={amountLocked}
+                    style={{ flex: 1.3, minWidth: 0, border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' }} />
+                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
+                    <input data-amt-idx={i} value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
+                      onKeyDown={e => { if (e.key === 'Enter' && Number(it.amount) > 0) { e.preventDefault(); if (isLast) { addItem(); setTimeout(() => { const next = document.querySelector(`input[placeholder="Stage name"]:nth-of-type(${i + 2})`); next && next.focus(); }, 30); } } }}
+                      disabled={amountLocked}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 8px 9px 32px', fontSize: 13.5, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', fontWeight: 700, background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' }} />
+                  </div>
+                  {canSetStatus ? (
+                    <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change status"
+                      style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', padding: 0 }}>
+                      <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                    </button>
+                  ) : (
+                    <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
+                  )}
+                  <button onClick={() => (items.length > 1 ? removeItem(i) : setItem(i, 'title', '') || setItem(i, 'amount', ''))} aria-label="Remove stage" disabled={amountLocked}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}>
+                    <Icon name="x" size={14} color="var(--fg-3)" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {!amountLocked && (
+            <button onClick={addItem} style={{ display: 'flex', alignItems: 'center', gap: 5, border: '1px dashed var(--border-strong)', background: 'transparent', borderRadius: 9, padding: '7px 12px', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: 'var(--fg-2)' }}>
+              <Icon name="plus" size={13} color="var(--fg-2)" /> Add another stage
+            </button>
           )}
-          <button onClick={addItem} className="inh-link" style={{ fontSize: 13, fontWeight: 600 }}>+ Add another stage</button>
         </div>
         <div>
           <label className="inh-label">Method</label>
