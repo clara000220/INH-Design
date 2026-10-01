@@ -813,8 +813,19 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
                       </div>
                     ) : null}
                     {isDone && (
-                      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
-                        <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
+                      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 700, fontSize: 12.5 }}>
+                          <Icon name="check-circle" size={15} color="var(--success)" /> Phase complete
+                        </span>
+                        {editable && onMarkPhaseComplete && (
+                          <button onClick={() => onMarkPhaseComplete(p, false)} style={{
+                            display: 'flex', alignItems: 'center', gap: 5, border: '1px solid var(--border-strong)',
+                            background: 'var(--surface)', color: 'var(--fg-2)', borderRadius: 10, padding: '6px 11px',
+                            fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                          }}>
+                            <Icon name="arrow-left" size={13} color="var(--fg-2)" /> Mark incomplete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

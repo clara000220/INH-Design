@@ -1424,9 +1424,13 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
-  const handleMarkPhaseComplete = async (phase) => {
+  const handleMarkPhaseComplete = async (phase, complete = true) => {
     if (!IS_LIVE) return;
-    await api.updatePhase(phase.id, { status: 'completed', pct: 100 });
+    // complete=true marks the phase done; complete=false reopens it (reverts
+    // to in-progress so the next tap of "Mark phase complete" works again).
+    await api.updatePhase(phase.id, complete
+      ? { status: 'completed', pct: 100 }
+      : { status: 'progress', pct: 0 });
     await loadDetail(activeProjectId);
   };
 
