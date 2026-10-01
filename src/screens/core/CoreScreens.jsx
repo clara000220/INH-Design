@@ -336,10 +336,19 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
     ? new Date(project.est_handover).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
     : '20 Jun';
 
-  // Overall progress auto-derives from item completion when items exist.
+  // Overall progress auto-derives from phase progress. Each phase counts as
+  // its own unit of work: a phase with sub-items contributes those items
+  // (done / total), and a phase with NO sub-items contributes as a single
+  // unit — done when "Mark phase complete" has been tapped (status =
+  // 'completed'). Previously phases without items were invisible to the
+  // calculation, so marking them complete didn't move the overall %.
   const itemTotals = (phases || []).reduce((a, p) => {
     const tks = p.tasks || [];
-    return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length };
+    if (tks.length > 0) {
+      return { t: a.t + tks.length, d: a.d + tks.filter(x => x.done).length };
+    }
+    // No sub-items → the phase itself is the unit.
+    return { t: a.t + 1, d: a.d + (p.status === 'completed' ? 1 : 0) };
   }, { t: 0, d: 0 });
   const hasItems = itemTotals.t > 0;
   const overallPct = hasItems ? Math.round((itemTotals.d / itemTotals.t) * 100) : (project?.progress ?? 0);
@@ -399,7 +408,7 @@ export function OverviewScreen({ role, project, phases = INH_DATA.phases, schedu
           {CAN_EDIT(role) && (
             hasItems ? (
               <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, color: 'var(--on-dark-2)', fontSize: 12.5, fontWeight: 600 }}>
-                <Icon name="check-circle" size={15} color="var(--on-dark-2)" /> Auto-calculated from {itemTotals.d}/{itemTotals.t} items
+                <Icon name="check-circle" size={15} color="var(--on-dark-2)" /> Auto-calculated from {itemTotals.d}/{itemTotals.t} completed step{itemTotals.t === 1 ? '' : 's'}
               </div>
             ) : onEditProgress && (
               <button onClick={onEditProgress} style={{
