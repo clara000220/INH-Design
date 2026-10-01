@@ -41,19 +41,41 @@ export async function listProjects() {
   // Join in the creator's profile so the Client Status card can show
   // "Created 1 Jun 2026 by Ali bin Ahmad". Older rows have created_by=null,
   // in which case creator stays null and the UI just shows the date.
+  // Also pull in the phases + tasks so we can derive the SAME
+  // auto-progress number the Overview shows — otherwise the Projects list
+  // can drift (e.g. a stored projects.progress of 100 while the actual
+  // phase/item state only adds up to 44 %).
   const { data, error } = await supabase.from('projects')
-    .select('*, creator:created_by(full_name, role)')
+    .select('*, creator:created_by(full_name, role), phases(id, status, phase_tasks(id, done))')
     .order('code', { ascending: true });
   if (error) throw error;
-  return (data || []).map(p => ({
-    id: p.id, name: p.name, code: p.code, address: p.address, type: p.type,
-    progress: p.progress, status: p.status, est_handover: p.est_handover,
-    stage: p.stage, stage_dates: p.stage_dates || {}, stage_items: p.stage_items || {}, created_at: p.created_at,
-    quotation: p.quotation, received_payments: p.received_payments || [],
-    created_by: p.created_by || null,
-    creator_name: p.creator?.full_name || null,
-    creator_role: p.creator?.role || null,
-  }));
+  return (data || []).map(p => {
+    // Mirror the Overview formula exactly: each phase is one unit of work.
+    // Phase with sub-items → contributes items.length / items.done.
+    // Phase without         → contributes 1 unit, done iff status='completed'.
+    let t = 0, d = 0;
+    (p.phases || []).forEach(ph => {
+      const tks = ph.phase_tasks || [];
+      if (tks.length > 0) {
+        t += tks.length;
+        d += tks.filter(x => x.done).length;
+      } else {
+        t += 1;
+        if (ph.status === 'completed') d += 1;
+      }
+    });
+    const derivedProgress = t > 0 ? Math.round((d / t) * 100) : (p.progress ?? 0);
+    return {
+      id: p.id, name: p.name, code: p.code, address: p.address, type: p.type,
+      progress: derivedProgress,
+      status: p.status, est_handover: p.est_handover,
+      stage: p.stage, stage_dates: p.stage_dates || {}, stage_items: p.stage_items || {}, created_at: p.created_at,
+      quotation: p.quotation, received_payments: p.received_payments || [],
+      created_by: p.created_by || null,
+      creator_name: p.creator?.full_name || null,
+      creator_role: p.creator?.role || null,
+    };
+  });
 }
 
 export async function createProject({ name, code, address, type, est_handover }) {
