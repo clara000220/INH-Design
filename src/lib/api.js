@@ -129,6 +129,7 @@ export async function listPhases(projectId) {
   return (data || []).map(p => ({
     id: p.id, name: p.name, status: p.status, pct: p.pct,
     dates: fmtRange(p.start_date, p.end_date),
+    completed_at: p.completed_at || null,
     tasks: (p.phase_tasks || [])
       .slice().sort((a, b) => a.sort_order - b.sort_order)
       .map(t => ({ id: t.id, title: t.title, note: t.note || '', done: t.done, due_date: t.due_date, end_date: t.end_date })),
@@ -337,10 +338,17 @@ export async function deleteScheduleItem(id) {
 // Update an existing phase (e.g. mark complete, change pct/status/name/dates).
 export async function updatePhase(id, patch = {}) {
   const clean = {};
-  ['name', 'status', 'pct', 'start_date', 'end_date'].forEach(k => {
+  ['name', 'status', 'pct', 'start_date', 'end_date', 'completed_at'].forEach(k => {
     if (patch[k] !== undefined) clean[k] = patch[k];
   });
   if (clean.status === 'completed' && patch.pct === undefined) clean.pct = 100;
+  // Auto-stamp completed_at when transitioning to completed, and clear it
+  // when reopening — but only if the caller didn't supply its own value.
+  if (patch.status === 'completed' && patch.completed_at === undefined) {
+    clean.completed_at = new Date().toISOString();
+  } else if (patch.status && patch.status !== 'completed' && patch.completed_at === undefined) {
+    clean.completed_at = null;
+  }
   const { error } = await supabase.from('phases').update(clean).eq('id', id);
   if (error) throw error;
 }

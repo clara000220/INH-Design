@@ -1229,9 +1229,15 @@ export default function App() {
     const today = new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' });
     const phasesHtml = phases.map((ph, i) => {
       const tks = ph.tasks || []; const t = tks.length; const dn = tks.filter(x => x.done).length;
-      const pct = t ? Math.round((dn / t) * 100) : ph.pct;
+      // Mirror the Overview formula: a phase with no sub-items is "done"
+      // when its status is 'completed'.
+      const isDone = ph.status === 'completed' || (t > 0 && dn === t);
+      const pct = t ? Math.round((dn / t) * 100) : (isDone ? 100 : (ph.pct || 0));
+      const completedBadge = isDone
+        ? `<span class="done-badge">&#10003; Completed${ph.completed_at ? ` on ${fmt(ph.completed_at)}` : ''}</span>`
+        : '';
       const items = tks.map(it => `<li>${it.done ? '&#9745;' : '&#9744;'} ${esc(it.title)}${it.due_date ? ` <span class="muted">(${fmt(it.due_date)}${it.end_date ? ` &rarr; ${fmt(it.end_date)}` : ''})</span>` : ''}</li>`).join('');
-      return `<div class="phase"><div class="ph-h"><b>${i + 1}. ${esc(ph.name)}</b><span>${dn}/${t} items &middot; ${pct}%</span></div>${items ? `<ul>${items}</ul>` : '<p class="muted">No items.</p>'}</div>`;
+      return `<div class="phase ${isDone ? 'phase--done' : ''}"><div class="ph-h"><b>${i + 1}. ${esc(ph.name)}</b><span>${t > 0 ? `${dn}/${t} items &middot; ` : ''}${pct}%</span></div>${completedBadge}${items ? `<ul>${items}</ul>` : (t > 0 ? '<p class="muted">No items.</p>' : '')}</div>`;
     }).join('');
     // For each update, walk every photo in u.photos (populated by
     // listUpdates from the update_photos rows). Fall back to the single
@@ -1259,6 +1265,8 @@ export default function App() {
   h2{font-size:15px;border-bottom:2px solid #ececec;padding-bottom:6px;margin:24px 0 12px}
   .phase{margin-bottom:12px}
   .ph-h{display:flex;justify-content:space-between;font-size:14px}
+  .done-badge{display:inline-block;margin:6px 0 2px;padding:2px 10px;background:#e6f1ea;color:#357a4c;border-radius:999px;font-size:11.5px;font-weight:700}
+  .phase--done .ph-h b{color:#357a4c}
   ul{margin:6px 0 0;padding-left:18px;font-size:13px}
   li{margin:2px 0}
   .muted{color:#8a8a8a;font-size:12px}
