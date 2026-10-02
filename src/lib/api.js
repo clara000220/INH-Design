@@ -417,6 +417,8 @@ export async function listUpdates(projectId) {
     return {
       id: u.id, room: u.room, isNew: u.is_new,
       date: fmtDate(u.captured_on),
+      captured_on: u.captured_on || null,
+      created_at: u.created_at || null,
       count: paths.length,
       tone: TONES[i % TONES.length],
       thumb: urls[0] || null,

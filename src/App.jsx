@@ -1239,18 +1239,62 @@ export default function App() {
       const items = tks.map(it => `<li>${it.done ? '&#9745;' : '&#9744;'} ${esc(it.title)}${it.due_date ? ` <span class="muted">(${fmt(it.due_date)}${it.end_date ? ` &rarr; ${fmt(it.end_date)}` : ''})</span>` : ''}</li>`).join('');
       return `<div class="phase ${isDone ? 'phase--done' : ''}"><div class="ph-h"><b>${i + 1}. ${esc(ph.name)}</b><span>${t > 0 ? `${dn}/${t} items &middot; ` : ''}${pct}%</span></div>${completedBadge}${items ? `<ul>${items}</ul>` : (t > 0 ? '<p class="muted">No items.</p>' : '')}</div>`;
     }).join('');
-    // For each update, walk every photo in u.photos (populated by
-    // listUpdates from the update_photos rows). Fall back to the single
-    // thumbnail when photos isn't available (demo mode or old records),
-    // so we never end up with nothing. The caption carries an N/total
-    // suffix so it's clear how many shots the reader is seeing.
-    const photosHtml = updates.flatMap(u => {
+    // Group photos by category (the update's room — pre-filled with the
+    // phase name when the user tapped "Take progress photos" on a phase).
+    // Each group becomes its own heading + grid in the report. Phase
+    // name match is case + whitespace insensitive so small typos still
+    // bucket correctly. Updates whose room doesn't match any phase go
+    // under "Other".
+    const normRoom = (s) => String(s || '').trim().toLowerCase();
+    const phaseKeys = phases.map(ph => normRoom(ph.name));
+    // Keep category order aligned with the phase list; "Other" goes last.
+    const categoryOrder = [...phases.map(ph => ph.name)];
+    const groups = new Map();
+    const addPhoto = (cat, html) => {
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat).push(html);
+    };
+    // Sort updates earliest → latest. api.listUpdates returns newest first;
+    // for a chronological report we want the opposite. Supabase gives us
+    // `captured_on` on the row (string YYYY-MM-DD) and the UI maps it to
+    // `date` (a formatted "N Mon YYYY"). We parse both to a timestamp and
+    // fall back to created_at / 0 for robustness.
+    const parseDate = (u) => {
+      const raw = u.captured_on || u.created_at || u.date || '';
+      const t = Date.parse(raw);
+      return isNaN(t) ? 0 : t;
+    };
+    const updatesChrono = [...updates].sort((a, b) => parseDate(a) - parseDate(b));
+    updatesChrono.forEach(u => {
       const urls = (Array.isArray(u.photos) && u.photos.length ? u.photos
                     : u.thumb ? [u.thumb] : []);
-      if (!urls.length) return [];
-      const label = `${esc(u.room || '')}${u.date ? ' &middot; ' + esc(u.date) : ''}`;
-      return urls.map((url, i) => `<figure class="photo"><img src="${url}"/><figcaption>${label}${urls.length > 1 ? ` (${i + 1}/${urls.length})` : ''}</figcaption></figure>`);
-    }).join('');
+      if (!urls.length) return;
+      const roomKey = normRoom(u.room);
+      // Pick the matching phase name (preserving the project's casing), or
+      // fall back to the room name itself, or "Other" if room is blank.
+      const matchedPhaseIdx = phaseKeys.indexOf(roomKey);
+      const category = matchedPhaseIdx >= 0
+        ? phases[matchedPhaseIdx].name
+        : (u.room ? u.room : 'Other');
+      const dateLabel = u.date ? ' &middot; ' + esc(u.date) : '';
+      urls.forEach((url, i) => {
+        const suffix = urls.length > 1 ? ` (${i + 1}/${urls.length})` : '';
+        addPhoto(category, `<figure class="photo"><img src="${url}"/><figcaption>${esc(category)}${dateLabel}${suffix}</figcaption></figure>`);
+      });
+    });
+    // Build the final blocks: known phases in their order, then any
+    // non-phase categories (e.g. "Kitchen") in insertion order, then
+    // "Other" if present.
+    const seen = new Set();
+    const blocks = [];
+    categoryOrder.forEach(cat => {
+      if (groups.has(cat)) { blocks.push([cat, groups.get(cat)]); seen.add(cat); }
+    });
+    groups.forEach((v, k) => { if (!seen.has(k) && k !== 'Other') blocks.push([k, v]); });
+    if (groups.has('Other')) blocks.push(['Other', groups.get('Other')]);
+    const photosHtml = blocks.map(([cat, items]) =>
+      `<div class="photo-group"><h3 class="photo-group-h">${esc(cat)} <span class="muted">&middot; ${items.length} photo${items.length === 1 ? '' : 's'}</span></h3><div class="photos">${items.join('')}</div></div>`
+    ).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p?.name || 'Project')} report</title>
 <style>
   *{box-sizing:border-box}
@@ -1271,6 +1315,9 @@ export default function App() {
   li{margin:2px 0}
   .muted{color:#8a8a8a;font-size:12px}
   .photos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .photo-group{margin-top:16px;page-break-inside:avoid}
+  .photo-group-h{font-size:13.5px;font-weight:800;margin:0 0 8px;padding:6px 10px;background:#f4f4ef;border-left:3px solid #cfe04a;border-radius:4px;color:#1d1d1b}
+  .photo-group-h .muted{font-weight:600;font-size:11.5px;margin-left:4px}
   .photo{margin:0}
   .photo img{width:100%;height:150px;object-fit:cover;border-radius:8px;display:block;background:#eee}
   figcaption{font-size:11px;color:#555;margin-top:3px}
