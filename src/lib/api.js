@@ -78,6 +78,15 @@ export async function listProjects() {
   });
 }
 
+// Ask the server for the next free project code. Done via a security-definer
+// RPC so admins — whose RLS hides projects they don't own — still get the
+// real next number, not a duplicate of a code they can't see.
+export async function nextProjectCode() {
+  const { data, error } = await supabase.rpc('next_project_code');
+  if (error) throw error;
+  return data;
+}
+
 export async function createProject({ name, code, address, type, est_handover }) {
   // Stamp the current user as the creator so the project history shows who
   // added it. Uses auth.uid() looked up client-side because the projects

@@ -543,7 +543,7 @@ function SupportSheet({ onClose }) {
   );
 }
 
-function AddProjectSheet({ onClose, onCreate, onAddItems, suggestedCode, template = [] }) {
+function AddProjectSheet({ onClose, onCreate, onAddItems, suggestedCode, fetchNextCode, template = [] }) {
   const [step, setStep] = useState(1);
   const [f, setF] = useState({ name: '', code: suggestedCode || '', address: '', type: '', est_handover: '' });
   const [busy, setBusy] = useState(false);
@@ -552,6 +552,19 @@ function AddProjectSheet({ onClose, onCreate, onAddItems, suggestedCode, templat
   const [sel, setSel] = useState([]);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
   const ready = f.name.trim() && f.code.trim();
+
+  // Ask the server for the real next code when the sheet opens. The RPC
+  // sees every row regardless of RLS, so admins stop getting duplicates
+  // of codes they can't see in their own projects list. We only override
+  // if the user hasn't typed anything yet.
+  useEffect(() => {
+    if (!fetchNextCode) return;
+    let active = true;
+    fetchNextCode()
+      .then(code => { if (active && code) setF(s => (s.code === (suggestedCode || '') ? { ...s, code } : s)); })
+      .catch(() => {/* keep local suggestion as fallback */});
+    return () => { active = false; };
+  }, [fetchNextCode]);
 
   const continueToItems = async () => {
     if (!ready) return;
@@ -1195,9 +1208,29 @@ export default function App() {
       setProjects(ps => [...ps, demo]);
       return null;   // demo: skip the item picker
     }
-    const proj = await api.createProject(form);
-    await reloadTop();
-    return proj;
+    // Handle the race where two staff pick the same code at once, or the
+    // user kept a stale "nextProjectCode" open while another project landed.
+    // On the duplicate-key error, ask the server for a fresh code and retry
+    // once with it, surfacing the new code so the UI reflects reality.
+    try {
+      const proj = await api.createProject(form);
+      await reloadTop();
+      return proj;
+    } catch (e) {
+      const msg = String(e?.message || '');
+      if (/duplicate key|unique constraint|projects_code_key/i.test(msg)) {
+        try {
+          const fresh = await api.nextProjectCode();
+          if (fresh && fresh !== form.code) {
+            const retry = await api.createProject({ ...form, code: fresh });
+            await reloadTop();
+            return retry;
+          }
+        } catch { /* fall through to the original error */ }
+        throw new Error(`That project code is already taken. Try again — the next free code has been requested.`);
+      }
+      throw e;
+    }
   };
 
   // Add the chosen template phases (with their items) to a freshly-created project.
@@ -1807,7 +1840,7 @@ export default function App() {
       {sheet === 'settings' && <SettingsSheet lang={lang} onChangeLang={changeLang} onClose={() => setSheet(null)}
         onEditTemplate={CAN_EDIT(role) ? () => { setSheet(null); push({ type: 'template' }); } : null} />}
       {sheet === 'support' && <SupportSheet onClose={() => setSheet(null)} />}
-      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onCreate={handleAddProject} onAddItems={handleAddProjectItems} suggestedCode={nextProjectCode} template={template} />}
+      {sheet === 'addProject' && <AddProjectSheet onClose={() => setSheet(null)} onCreate={handleAddProject} onAddItems={handleAddProjectItems} suggestedCode={nextProjectCode} fetchNextCode={IS_LIVE ? api.nextProjectCode : null} template={template} />}
       {sheet === 'editProject' && <EditProjectSheet project={activeProject} onClose={() => setSheet(null)} onSave={handleEditProject} />}
       {sheet === 'uploadDoc' && <UploadDocSheet onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
       {typeof sheet === 'object' && sheet?.kind === 'uploadStageDoc' && <UploadDocSheet stage={sheet.stage} onClose={() => setSheet(null)} onSave={handleUploadDoc} />}
