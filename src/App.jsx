@@ -1697,7 +1697,7 @@ export default function App() {
         return <FeesDetailScreen project={top.project} payments={live(detail?.payments)} audit={IS_LIVE ? audit : undefined}
           onAdd={handleAddPayment}
           onSetStatus={role === 'owner' ? handleSetPayment : null}
-          onEdit={role === 'owner' ? handleEditPayment : null}
+          onEdit={CAN_EDIT(role) ? handleEditPayment : null}
           onDelete={role === 'owner' ? handleDeletePayment : null}
           onApprove={role === 'owner' ? handleApprovePayment : null}
           isOwner={role === 'owner'}

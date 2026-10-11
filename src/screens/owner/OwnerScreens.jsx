@@ -131,6 +131,13 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
   // Owners can still change it; changing it doesn't auto-unapprove, but the
   // owner can hit "Revoke approval" if they want to signal it's back open.
   const amountLocked = !!approvedAt && !isOwner;
+  // Admins editing an existing payment can only add new stages — the
+  // contractor + existing stages are frozen (DB trigger also enforces this,
+  // this is just the matching UI gate). isEditingAsAdmin captures that
+  // state once at mount; a fresh "Add payment" has no `pay` and is fully
+  // open to admins.
+  const isEditingAsAdmin = !isOwner && !!pay;
+  const originalItemCount = pay?.items?.length || 0;
   const [f, setF] = useState({
     contractor: pay?.contractor || '', stage: pay?.stage || '',
     amount: pay?.amount != null ? String(pay.amount) : '',
@@ -238,8 +245,16 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
           </div>
         </div>
       )}
+      {isEditingAsAdmin && !approvedAt && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'var(--info-tint)', border: '1px solid var(--info)', borderRadius: 10, marginBottom: 12 }}>
+          <Icon name="shield" size={18} color="var(--info)" />
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--fg-1)' }}>
+            <b>Admin edit</b> · You can <b>add new stages</b> below, but existing contractor name and stage amounts are locked. Ask the owner to change money figures.
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Contractor" icon="hard-hat" value={f.contractor} onChange={set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
+        <Field label={isEditingAsAdmin ? 'Contractor (locked)' : 'Contractor'} icon="hard-hat" value={f.contractor} onChange={isEditingAsAdmin ? (() => {}) : set('contractor')} placeholder="e.g. Ah Seng Tiling" autoFocus />
         <Field label="Stage / work" icon="briefcase" value={f.stage} onChange={set('stage')} placeholder="e.g. Tiling & flooring" />
         {/* Payment breakdown — one row per stage of work. The total is
             auto-summed at the top and used as the payment's amount on save,
@@ -261,15 +276,19 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
               const stCycle = { pending: 'released', released: 'hold', hold: 'pending' };
               const isLast = i === items.length - 1;
               const methods = ['Bank transfer', 'DuitNow', 'Cash'];
-              const inS = { border: '1px solid var(--border)', borderRadius: 9, padding: '9px 11px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', background: amountLocked ? 'var(--surface-2)' : 'var(--surface)' };
+              // Admin editing: existing stages (index < originalItemCount)
+              // are frozen client-side to match the DB trigger. New rows the
+              // admin appends in this session are freely editable.
+              const stageLocked = amountLocked || (isEditingAsAdmin && i < originalItemCount);
+              const inS = { border: '1px solid var(--border)', borderRadius: 9, padding: '9px 11px', fontSize: 13, fontFamily: 'inherit', color: 'var(--fg-1)', boxSizing: 'border-box', background: stageLocked ? 'var(--surface-2)' : 'var(--surface)' };
               return (
-                <div key={i} style={{ border: '1px solid var(--border-strong)', borderRadius: 14, padding: 12, background: 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+                <div key={i} style={{ border: '1px solid var(--border-strong)', borderRadius: 14, padding: 12, background: stageLocked ? 'var(--surface-2)' : 'var(--surface)', display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
                   {/* Top row: # + stage name + status pill + × */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 999, background: 'var(--inh-lime-tint)', color: 'var(--inh-charcoal)', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                    <div style={{ width: 26, height: 26, borderRadius: 999, background: stageLocked ? 'var(--border)' : 'var(--inh-lime-tint)', color: 'var(--inh-charcoal)', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
                     <input value={it.title} onChange={e => setItem(i, 'title', e.target.value)} placeholder="Stage name (e.g. Wiring)"
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); const amt = document.querySelector(`input[data-amt-idx="${i}"]`); amt && amt.focus(); } }}
-                      disabled={amountLocked}
+                      disabled={stageLocked}
                       style={{ ...inS, flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700 }} />
                     {canSetStatus ? (
                       <button onClick={() => setItem(i, 'status', stCycle[st] || 'pending')} title="Tap to change status"
@@ -279,8 +298,8 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
                     ) : (
                       <Pill status={st}>{st === 'pending' ? 'Pending' : st === 'released' ? 'Released' : 'On hold'}</Pill>
                     )}
-                    <button onClick={() => (items.length > 1 ? removeItem(i) : (setItem(i, 'title', ''), setItem(i, 'amount', '')))} aria-label="Remove stage" disabled={amountLocked}
-                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}>
+                    <button onClick={() => (items.length > 1 ? removeItem(i) : (setItem(i, 'title', ''), setItem(i, 'amount', '')))} aria-label="Remove stage" disabled={stageLocked}
+                      style={{ border: 'none', background: 'transparent', cursor: stageLocked ? 'default' : 'pointer', display: 'flex', padding: 4, flexShrink: 0, opacity: stageLocked ? 0.3 : 1 }}>
                       <Icon name="x" size={15} color="var(--fg-3)" />
                     </button>
                   </div>
@@ -290,7 +309,7 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
                     <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
                     <input data-amt-idx={i} value={it.amount} onChange={e => setItem(i, 'amount', e.target.value)} placeholder="0.00" type="number"
                       onKeyDown={e => { if (e.key === 'Enter' && Number(it.amount) > 0) { e.preventDefault(); if (isLast) { addItem(); setTimeout(() => { const next = document.querySelector(`input[placeholder="Stage name (e.g. Wiring)"]:nth-of-type(${i + 2})`); next && next.focus(); }, 30); } } }}
-                      disabled={amountLocked}
+                      disabled={stageLocked}
                       style={{ ...inS, width: '100%', padding: '10px 12px 10px 38px', fontSize: 16, fontWeight: 800 }} />
                   </div>
 
@@ -298,14 +317,14 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ flex: '1 1 140px', minWidth: 130 }}>
                       <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Paid on</div>
-                      <input type="date" value={it.date || ''} onChange={e => setItem(i, 'date', e.target.value)} disabled={amountLocked}
+                      <input type="date" value={it.date || ''} onChange={e => setItem(i, 'date', e.target.value)} disabled={stageLocked}
                         style={{ ...inS, width: '100%' }} />
                     </div>
                     <div style={{ flex: '2 1 200px', minWidth: 200 }}>
                       <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Method</div>
                       <div style={{ display: 'flex', gap: 5 }}>
                         {methods.map(m => (
-                          <button key={m} onClick={() => setItem(i, 'method', it.method === m ? '' : m)} disabled={amountLocked}
+                          <button key={m} onClick={() => setItem(i, 'method', it.method === m ? '' : m)} disabled={stageLocked}
                             className={'inh-chip' + (it.method === m ? ' active' : '')}
                             style={{ flex: 1, fontSize: 12, padding: '7px 6px', whiteSpace: 'nowrap' }}>{m}</button>
                         ))}
@@ -316,7 +335,7 @@ function PaymentForm({ pay, onClose, onSave, onApprove, isOwner = false, canSetS
                   {/* Note row */}
                   <div>
                     <div className="meta" style={{ marginBottom: 4, fontSize: 11 }}>Note (optional)</div>
-                    <input value={it.note || ''} onChange={e => setItem(i, 'note', e.target.value)} placeholder="e.g. ref no, invoice #, milestone" disabled={amountLocked}
+                    <input value={it.note || ''} onChange={e => setItem(i, 'note', e.target.value)} placeholder="e.g. ref no, invoice #, milestone" disabled={stageLocked}
                       style={{ ...inS, width: '100%' }} />
                   </div>
                 </div>
