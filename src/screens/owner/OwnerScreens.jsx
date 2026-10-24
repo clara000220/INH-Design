@@ -65,8 +65,11 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
   // Chip → matcher. A project passes the chip if it has at least one
   // payment matching that bucket. Counts come from listProjectFees so this
   // works even when the chip-filtered list hides a project entirely.
+  // "On track" is project-level: at least one payment exists AND nothing
+  // is stuck (no overdue, no on-hold). So it reads as "payments are moving."
   const chipMatch = {
     'All': () => true,
+    'On track': (p) => (p.committed || 0) > 0 && (p.overdueN || 0) === 0 && (p.holdN || 0) === 0,
     'Pending release': (p) => (p.pendingN || 0) > 0,
     'Released': (p) => (p.releasedN || 0) > 0,
     'Overdue': (p) => (p.overdueN || 0) > 0,
