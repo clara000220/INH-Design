@@ -1,4 +1,5 @@
 /* INH — shared primitives */
+import { useState, useEffect } from 'react';
 import { Icon } from './Icon.jsx';
 import { INH_DATA } from '../data/data.js';
 import { t } from '../lib/i18n.js';
@@ -26,15 +27,43 @@ export function RoleBadge({ role }) {
   return <span className={'inh-badge ' + meta.badge}>{meta.label}</span>;
 }
 
-export function Btn({ variant = 'primary', icon, children, onClick, disabled, size, style }) {
+export function Btn({ variant = 'primary', icon, children, onClick, disabled, size, style, busy: busyProp }) {
+  // Auto-detect: if the onClick handler returns a Promise, treat the button
+  // as "busy" until that promise settles. Keeps every call site free of
+  // bespoke setBusy/useState boilerplate while still letting callers force
+  // the spinner on with a `busy` prop when they already manage it.
+  const [autoBusy, setAutoBusy] = useState(false);
+  const busy = !!busyProp || autoBusy;
+  const handleClick = async (e) => {
+    if (busy || disabled || !onClick) return;
+    const ret = onClick(e);
+    if (ret && typeof ret.then === 'function') {
+      setAutoBusy(true);
+      try { await ret; } finally { setAutoBusy(false); }
+    }
+  };
   return (
     <button
-      className={'inh-btn inh-btn--' + variant + (size === 'sm' ? ' inh-btn--sm' : '')}
-      onClick={onClick} disabled={disabled} style={style}
+      className={'inh-btn inh-btn--' + variant + (size === 'sm' ? ' inh-btn--sm' : '') + (busy ? ' inh-btn--busy' : '')}
+      onClick={handleClick} disabled={disabled || busy} style={style}
+      aria-busy={busy || undefined}
     >
-      {icon && <Icon name={icon} size={size === 'sm' ? 16 : 19} />}
+      {busy
+        ? <Spinner size={size === 'sm' ? 14 : 17} color="currentColor" />
+        : (icon && <Icon name={icon} size={size === 'sm' ? 16 : 19} />)}
       {children}
     </button>
+  );
+}
+
+/* Minimal inline spinner — one SVG, pure CSS rotation. Colour inherits
+   from the button text colour so it fits every variant. */
+export function Spinner({ size = 16, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 50 50" style={{ display: 'block', animation: 'inh-spin 0.9s linear infinite', flexShrink: 0 }} aria-hidden="true">
+      <circle cx="25" cy="25" r="20" fill="none" stroke={color} strokeWidth="5" opacity="0.22" />
+      <path d="M25 5 a20 20 0 0 1 20 20" fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" />
+    </svg>
   );
 }
 

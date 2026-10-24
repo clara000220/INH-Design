@@ -259,6 +259,27 @@
   display: flex; align-items: flex-end; animation: scrimIn .2s ease;
 }
 @keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes inh-spin { to { transform: rotate(360deg); } }
+
+/* Button busy state — dims the content, pointer-events off, works on every
+   variant because the spinner picks up currentColor from the button text. */
+.inh-btn--busy { opacity: 0.78; cursor: progress !important; }
+.inh-btn--busy:active { transform: none; }
+
+/* Top-of-screen progress bar for in-flight API calls. Sits above header +
+   sheets + dialogs so it stays visible no matter what's on screen. */
+.inh-topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 1000;
+  background: transparent; overflow: hidden; pointer-events: none;
+}
+.inh-topbar__fill {
+  width: 40%; height: 100%; background: linear-gradient(90deg, transparent, var(--inh-lime), transparent);
+  animation: inh-topbar-slide 1.2s cubic-bezier(.4,.0,.2,1) infinite;
+}
+@keyframes inh-topbar-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
 .inh-sheet {
   width: 100%; background: var(--surface-white); border-radius: 22px 22px 0 0;
   box-shadow: var(--shadow-sheet); padding: 10px 16px 30px;
