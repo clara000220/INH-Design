@@ -508,17 +508,23 @@ export async function listProjectFees() {
   if (ye) throw ye;
   const byProject = {};
   (payments || []).forEach(p => {
-    const b = byProject[p.project_id] || (byProject[p.project_id] = { committed: 0, released: 0, pending: 0 });
+    const b = byProject[p.project_id] || (byProject[p.project_id] = {
+      committed: 0, released: 0, pending: 0, pendingN: 0, releasedN: 0, overdueN: 0, holdN: 0,
+    });
     const amt = Number(p.amount);
     b.committed += amt;
-    if (p.status === 'released') b.released += amt;
-    else b.pending += amt;
+    if (p.status === 'released') { b.released += amt; b.releasedN += 1; }
+    else { b.pending += amt; }
+    if (p.status === 'pending')  b.pendingN += 1;
+    if (p.status === 'overdue')  b.overdueN += 1;
+    if (p.status === 'hold')     b.holdN    += 1;
   });
   return (projects || []).map(p => {
-    const b = byProject[p.id] || { committed: 0, released: 0, pending: 0 };
+    const b = byProject[p.id] || { committed: 0, released: 0, pending: 0, pendingN: 0, releasedN: 0, overdueN: 0, holdN: 0 };
     return {
       id: p.id, name: p.name, code: p.code, status: p.status,
       committed: b.committed, released: b.released, pending: b.pending,
+      pendingN: b.pendingN, releasedN: b.releasedN, overdueN: b.overdueN, holdN: b.holdN,
       releasedPct: b.committed ? Math.round((b.released / b.committed) * 100) : 0,
     };
   });

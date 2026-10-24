@@ -62,7 +62,18 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
   const totals = fees.reduce((a, p) => ({
     committed: a.committed + p.committed, released: a.released + p.released, pending: a.pending + p.pending,
   }), { committed: 0, released: 0, pending: 0 });
-  const chips = ['All', 'Pending release', 'Released', 'Overdue', 'On hold'];
+  // Chip → matcher. A project passes the chip if it has at least one
+  // payment matching that bucket. Counts come from listProjectFees so this
+  // works even when the chip-filtered list hides a project entirely.
+  const chipMatch = {
+    'All': () => true,
+    'Pending release': (p) => (p.pendingN || 0) > 0,
+    'Released': (p) => (p.releasedN || 0) > 0,
+    'Overdue': (p) => (p.overdueN || 0) > 0,
+    'On hold': (p) => (p.holdN || 0) > 0,
+  };
+  const chips = Object.keys(chipMatch);
+  const visibleFees = fees.filter(chipMatch[filter] || (() => true));
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -96,8 +107,15 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
           {chips.map(c => <button key={c} className={'inh-chip' + (filter === c ? ' active' : '')} onClick={() => setFilter(c)}>{c}</button>)}
         </div>
 
+        {visibleFees.length === 0 && filter !== 'All' && (
+          <div style={{ padding: '20px 14px', textAlign: 'center', background: 'var(--surface-2)', borderRadius: 12, color: 'var(--fg-2)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>No projects with {filter.toLowerCase()} payments.</div>
+            <div className="meta">Tap <b>All</b> to see every project.</div>
+          </div>
+        )}
+
         <div className="inh-cardgrid">
-          {fees.map(p => (
+          {visibleFees.map(p => (
             <div key={p.id} className="inh-card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => onOpenProject(p)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
