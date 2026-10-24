@@ -276,6 +276,19 @@ export async function updateProject(id, patch = {}) {
   if (error) throw error;
 }
 
+// Owner-only: manually mark a project's fees as Complete (even if the
+// derived pending > 0), or reopen it. On the server, projects_update
+// policy already gates this to owner/admin editors; the RLS also allows
+// the admin creator — so we only expose the toggle on the client to owner.
+export async function setFeesComplete(id, complete) {
+  const { data: u } = await supabase.auth.getUser();
+  const patch = complete
+    ? { fees_marked_complete_at: new Date().toISOString(), fees_marked_complete_by: u?.user?.id || null }
+    : { fees_marked_complete_at: null, fees_marked_complete_by: null };
+  const { error } = await supabase.from('projects').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
 /* ---- Owner backup: pull every project, update, document, and payment ----
    All queries respect RLS, so this only succeeds for owner accounts. Each
    returned row includes the project code so the CSVs are joinable in Excel. */
@@ -501,7 +514,7 @@ export async function getDocumentUrl(storagePath) {
 // Owner-only at the RLS layer; non-owners get an empty payments set.
 export async function listProjectFees() {
   const [{ data: projects, error: pe }, { data: payments, error: ye }] = await Promise.all([
-    supabase.from('projects').select('*').order('code'),
+    supabase.from('projects').select('*, marker:fees_marked_complete_by(full_name)').order('code'),
     supabase.from('payments').select('project_id, amount, status'),
   ]);
   if (pe) throw pe;
@@ -526,6 +539,8 @@ export async function listProjectFees() {
       committed: b.committed, released: b.released, pending: b.pending,
       pendingN: b.pendingN, releasedN: b.releasedN, overdueN: b.overdueN, holdN: b.holdN,
       releasedPct: b.committed ? Math.round((b.released / b.committed) * 100) : 0,
+      fees_marked_complete_at: p.fees_marked_complete_at || null,
+      fees_marked_complete_by_name: p.marker?.full_name || null,
     };
   });
 }

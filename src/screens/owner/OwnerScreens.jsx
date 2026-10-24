@@ -57,26 +57,31 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
 }
 
 /* =================== FEES — overview (OWNER ONLY) =================== */
-export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = true, pendingCount = 0 }) {
+export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = true, pendingCount = 0, onSetFeesComplete }) {
   const [filter, setFilter] = useState('All');
+  const [busyId, setBusyId] = useState(null);
   const totals = fees.reduce((a, p) => ({
     committed: a.committed + p.committed, released: a.released + p.released, pending: a.pending + p.pending,
   }), { committed: 0, released: 0, pending: 0 });
-  // Chip → matcher. A project passes the chip if it has at least one
-  // payment matching that bucket. Counts come from listProjectFees so this
-  // works even when the chip-filtered list hides a project entirely.
-  // "On track" is project-level: at least one payment exists AND nothing
-  // is stuck (no overdue, no on-hold). So it reads as "payments are moving."
+  // A project is "Complete" when the owner has manually marked it OR
+  // every committed ringgit has been released (pending === 0 with any
+  // committed value). Everything else is "Pending".
+  const isComplete = (p) =>
+    !!p.fees_marked_complete_at
+    || ((p.committed || 0) > 0 && (p.pending || 0) === 0);
   const chipMatch = {
     'All': () => true,
-    'On track': (p) => (p.committed || 0) > 0 && (p.overdueN || 0) === 0 && (p.holdN || 0) === 0,
-    'Pending release': (p) => (p.pendingN || 0) > 0,
-    'Released': (p) => (p.releasedN || 0) > 0,
-    'Overdue': (p) => (p.overdueN || 0) > 0,
-    'On hold': (p) => (p.holdN || 0) > 0,
+    'Pending': (p) => !isComplete(p),
+    'Complete': (p) => isComplete(p),
   };
   const chips = Object.keys(chipMatch);
   const visibleFees = fees.filter(chipMatch[filter] || (() => true));
+  const toggleComplete = async (p, next) => {
+    if (!onSetFeesComplete || busyId) return;
+    setBusyId(p.id);
+    try { await onSetFeesComplete(p.id, next); }
+    finally { setBusyId(null); }
+  };
   return (
     <div className="inh-scroll">
       <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -112,32 +117,54 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
 
         {visibleFees.length === 0 && filter !== 'All' && (
           <div style={{ padding: '20px 14px', textAlign: 'center', background: 'var(--surface-2)', borderRadius: 12, color: 'var(--fg-2)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>No projects with {filter.toLowerCase()} payments.</div>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>No {filter.toLowerCase()} projects.</div>
             <div className="meta">Tap <b>All</b> to see every project.</div>
           </div>
         )}
 
         <div className="inh-cardgrid">
-          {visibleFees.map(p => (
+          {visibleFees.map(p => {
+            const complete = isComplete(p);
+            const manual = !!p.fees_marked_complete_at;
+            return (
             <div key={p.id} className="inh-card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => onOpenProject(p)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div>
                   <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16 }}>{p.name}</div>
                   <div className="inh-row__sub">{p.code}</div>
                 </div>
-                <Pill status={p.status === 'ontrack' ? 'ontrack' : p.status} />
+                {complete
+                  ? <Pill status="completed">Complete</Pill>
+                  : <Pill status="pending">Pending</Pill>}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', margin: '14px 0 9px' }}>
                 <div><div className="meta">Committed</div><div className="inh-figure" style={{ fontSize: 16 }}>{rmk(p.committed)}</div></div>
-                <div style={{ textAlign: 'right' }}><div className="meta">Pending release</div><div className="inh-figure" style={{ fontSize: 16, color: 'var(--warning)' }}>{rmk(p.pending)}</div></div>
+                <div style={{ textAlign: 'right' }}><div className="meta">Pending release</div><div className="inh-figure" style={{ fontSize: 16, color: complete ? 'var(--success)' : 'var(--warning)' }}>{rmk(p.pending)}</div></div>
               </div>
-              <ProgressBar pct={p.releasedPct} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-                <span className="meta">{p.releasedPct}% released to contractors</span>
+              <ProgressBar pct={p.releasedPct} green={complete} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, alignItems: 'center' }}>
+                <span className="meta">
+                  {p.releasedPct}% released to contractors
+                  {manual && <span style={{ marginLeft: 6, color: 'var(--success)', fontWeight: 700 }}>· marked complete{p.fees_marked_complete_by_name ? ' by ' + p.fees_marked_complete_by_name : ''}</span>}
+                </span>
                 <Icon name="chevron-right" size={15} color="var(--fg-3)" />
               </div>
+              {isOwner && onSetFeesComplete && (
+                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                  <button onClick={() => toggleComplete(p, !complete)} disabled={busyId === p.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5, border: '1px solid var(--border-strong)',
+                      background: complete ? 'var(--surface)' : 'var(--inh-lime)',
+                      color: 'var(--fg-1)', borderRadius: 10, padding: '7px 12px',
+                      fontWeight: 700, fontSize: 12.5, cursor: busyId === p.id ? 'default' : 'pointer',
+                    }}>
+                    <Icon name={complete ? 'arrow-left' : 'check-circle'} size={13} color="var(--fg-1)" />
+                    {busyId === p.id ? 'Saving…' : (complete ? 'Reopen' : 'Mark complete')}
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
+          );})}
         </div>
       </div>
     </div>

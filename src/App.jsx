@@ -1662,6 +1662,17 @@ export default function App() {
     await loadDetail(activeProjectId);
   };
 
+  // Owner-only: manually flag a project's fees as Complete, or reopen it.
+  const handleSetFeesComplete = async (projectId, complete) => {
+    if (!IS_LIVE) return;
+    await api.setFeesComplete(projectId, complete);
+    // Optimistic — the full list reload picks up the server timestamp too.
+    setFees(fs => fs.map(f => f.id === projectId
+      ? { ...f, fees_marked_complete_at: complete ? new Date().toISOString() : null }
+      : f));
+    await reloadTop();
+  };
+
   // ---- header config ----
   const header = () => {
     if (top) {
@@ -1805,7 +1816,7 @@ export default function App() {
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
     if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
       onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
-    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} isOwner={role === 'owner'} pendingCount={pendingFees} />;
+    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} isOwner={role === 'owner'} pendingCount={pendingFees} onSetFeesComplete={role === 'owner' && IS_LIVE ? handleSetFeesComplete : null} />;
     if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
       onAddAccount={IS_LIVE ? () => setSheet('invite') : null}
