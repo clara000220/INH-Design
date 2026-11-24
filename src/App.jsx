@@ -5,6 +5,7 @@ import { Btn, Pill, AppHeader, TabBar, Sidebar, Sheet, Dialog } from './componen
 import { INH_DATA } from './data/data.js';
 import { supabase, IS_LIVE, normalizeLogin } from './lib/supabase.js';
 import { DEFAULT_TEMPLATE } from './lib/template.js';
+import { saveSession, loadSession, clearSession } from './lib/session.js';
 import * as api from './lib/api.js';
 import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
@@ -909,6 +910,46 @@ export default function App() {
   const pop = () => setStack(s => s.slice(0, -1));
   const top = stack[stack.length - 1];
 
+  // Rehydrate the saved stack once projects have arrived. Needs the live
+  // projects list so each stack entry's { type, projectId } ref can be
+  // rebuilt into a { type, project } with fresh server data. Only runs
+  // once per sign-in: guarded by a ref so switching role (which clears the
+  // stack) doesn't trigger another restore.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (auth !== 'in' || !role) return;
+    if (!projects || projects.length === 0) return;
+    const saved = loadSession();
+    if (!saved) { restoredRef.current = true; return; }
+    restoredRef.current = true;
+    // Only restore stack refs whose project still exists (projects may have
+    // been deleted while the user was away). Entries without a projectId
+    // (e.g. {type:'users'}, {type:'plan'}) always restore.
+    const restoredStack = (saved.stackRefs || []).map(r => {
+      if (!r.projectId) return { type: r.type };
+      const p = projects.find(x => x.id === r.projectId);
+      return p ? { type: r.type, project: p } : null;
+    }).filter(Boolean);
+    if (saved.tab && saved.tab !== 'home') setTab(saved.tab);
+    if (saved.feedProjectId && projects.find(p => p.id === saved.feedProjectId)) {
+      setFeedProjectId(saved.feedProjectId);
+    }
+    if (restoredStack.length) setStack(restoredStack);
+  }, [auth, role, projects]);
+
+  // Persist "where the user is" (tab + feed project + screen stack) so a
+  // reload / reopen lands back on the same page instead of home. ONLY saves
+  // AFTER the one-shot restore above has finished — otherwise the initial
+  // sign-in path (which transiently sets tab=home + stack=[] before the
+  // restore runs) would stomp the saved snapshot and nothing would ever
+  // restore on the next open.
+  useEffect(() => {
+    if (auth !== 'in') return;
+    if (!restoredRef.current) return;
+    saveSession({ tab, feedProjectId, stack });
+  }, [auth, tab, feedProjectId, stack]);
+
   /* ---- Phone back button → pop the current screen instead of exiting ----
      We keep a mirror of the app's overlay depth in the browser history.
      Pressing back on the phone fires `popstate`; we close the topmost open
@@ -1135,6 +1176,9 @@ export default function App() {
     setTab('home');
     setStack([]);
     setAuth('login');
+    // Forget the restore target on sign-out so the next person in doesn't
+    // land on the previous user's screen.
+    clearSession();
   };
 
   const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); setTask(null); };
