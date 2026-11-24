@@ -3,11 +3,16 @@
    navigation (tab name, feed project id, stack entries as {type, projectId})
    — not the full project objects or any transient sheet/dialog/photo state.
    Rehydration happens AFTER projects load, so we can map projectId → project
-   with the latest server data. */
+   with the latest server data.
 
-const KEY = 'inh-session-v1';
+   The snapshot is per-user (keyed by profile id) so if user A's session
+   expires and user B signs in on the same device, they don't inherit A's
+   last screen. A generic KEY_SHARED is used for demo mode / unknown user. */
 
-export function saveSession(snapshot) {
+const KEY_SHARED = 'inh-session-v1';
+const keyFor = (userId) => userId ? `inh-session-v1:${userId}` : KEY_SHARED;
+
+export function saveSession(snapshot, userId) {
   try {
     const safe = {
       tab: snapshot.tab || 'home',
@@ -18,13 +23,15 @@ export function saveSession(snapshot) {
       })).filter(e => !!e.type),
       savedAt: Date.now(),
     };
-    localStorage.setItem(KEY, JSON.stringify(safe));
+    localStorage.setItem(keyFor(userId), JSON.stringify(safe));
   } catch { /* storage full / disabled — just skip */ }
 }
 
-export function loadSession() {
+export function loadSession(userId) {
   try {
-    const raw = localStorage.getItem(KEY);
+    // Prefer the per-user snapshot; fall back to the generic one for anyone
+    // upgrading from the pre-scoped version so their saved screen still works.
+    const raw = localStorage.getItem(keyFor(userId)) || (userId ? localStorage.getItem(KEY_SHARED) : null);
     if (!raw) return null;
     const v = JSON.parse(raw);
     if (!v || typeof v !== 'object') return null;
@@ -32,6 +39,9 @@ export function loadSession() {
   } catch { return null; }
 }
 
-export function clearSession() {
-  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+export function clearSession(userId) {
+  try {
+    localStorage.removeItem(keyFor(userId));
+    if (!userId) localStorage.removeItem(KEY_SHARED);
+  } catch { /* ignore */ }
 }

@@ -914,18 +914,17 @@ export default function App() {
   // projects list so each stack entry's { type, projectId } ref can be
   // rebuilt into a { type, project } with fresh server data. Only runs
   // once per sign-in: guarded by a ref so switching role (which clears the
-  // stack) doesn't trigger another restore.
+  // stack) doesn't trigger another restore. Keyed by profile id so one
+  // user's "last screen" never leaks to another on the same device.
   const restoredRef = useRef(false);
+  const sessionUserId = profile?.id || null;
   useEffect(() => {
     if (restoredRef.current) return;
     if (auth !== 'in' || !role) return;
     if (!projects || projects.length === 0) return;
-    const saved = loadSession();
+    const saved = loadSession(sessionUserId);
     if (!saved) { restoredRef.current = true; return; }
     restoredRef.current = true;
-    // Only restore stack refs whose project still exists (projects may have
-    // been deleted while the user was away). Entries without a projectId
-    // (e.g. {type:'users'}, {type:'plan'}) always restore.
     const restoredStack = (saved.stackRefs || []).map(r => {
       if (!r.projectId) return { type: r.type };
       const p = projects.find(x => x.id === r.projectId);
@@ -936,19 +935,34 @@ export default function App() {
       setFeedProjectId(saved.feedProjectId);
     }
     if (restoredStack.length) setStack(restoredStack);
-  }, [auth, role, projects]);
+  }, [auth, role, projects, sessionUserId]);
 
-  // Persist "where the user is" (tab + feed project + screen stack) so a
-  // reload / reopen lands back on the same page instead of home. ONLY saves
-  // AFTER the one-shot restore above has finished — otherwise the initial
-  // sign-in path (which transiently sets tab=home + stack=[] before the
-  // restore runs) would stomp the saved snapshot and nothing would ever
-  // restore on the next open.
+  // Persist on every change to tab / feedProjectId / stack, but only AFTER
+  // the restore has finished (otherwise the initial sign-in path — which
+  // sets tab=home + stack=[] before the restore runs — would stomp the
+  // saved snapshot and nothing would ever restore on the next open).
   useEffect(() => {
     if (auth !== 'in') return;
     if (!restoredRef.current) return;
-    saveSession({ tab, feedProjectId, stack });
-  }, [auth, tab, feedProjectId, stack]);
+    saveSession({ tab, feedProjectId, stack }, sessionUserId);
+  }, [auth, tab, feedProjectId, stack, sessionUserId]);
+
+  // Belt-and-braces save for mobile: when the tab/app is backgrounded or
+  // put away, `pagehide` fires reliably (Safari ignores beforeunload). We
+  // also save on visibilitychange→hidden, which fires when Android or iOS
+  // moves the user to another app — the very moment we need to capture
+  // "where they left".
+  useEffect(() => {
+    if (auth !== 'in' || !restoredRef.current) return;
+    const persist = () => saveSession({ tab, feedProjectId, stack }, sessionUserId);
+    const onVis = () => { if (document.visibilityState === 'hidden') persist(); };
+    window.addEventListener('pagehide', persist);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', persist);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [auth, tab, feedProjectId, stack, sessionUserId]);
 
   /* ---- Phone back button → pop the current screen instead of exiting ----
      We keep a mirror of the app's overlay depth in the browser history.
@@ -1106,7 +1120,12 @@ export default function App() {
     };
     const apply = (session) => {
       if (!active) return;
-      if (!session) { setAuth('login'); setRole(null); return; }
+      if (!session) {
+        setAuth('login'); setRole(null);
+        // Session is gone — let the next sign-in run a fresh restore.
+        restoredRef.current = false;
+        return;
+      }
       // Enter the app synchronously; never await supabase calls inside the
       // onAuthStateChange callback — doing so deadlocks the auth client and
       // leaves sign-in stuck. Defer the data fetch to the next tick instead.
@@ -1170,15 +1189,17 @@ export default function App() {
   };
 
   const signOut = async () => {
+    // Clear this user's saved snapshot BEFORE wiping their profile id —
+    // we need it to form the right localStorage key.
+    clearSession(profile?.id || null);
     if (IS_LIVE) await supabase.auth.signOut();
     setRole(IS_LIVE ? null : 'owner');
     setProfile(null); setDetail(null);
     setTab('home');
     setStack([]);
     setAuth('login');
-    // Forget the restore target on sign-out so the next person in doesn't
-    // land on the previous user's screen.
-    clearSession();
+    // Allow a fresh restore attempt next time they (or anyone else) signs in.
+    restoredRef.current = false;
   };
 
   const switchRole = r => { setRole(r); setTab('home'); setStack([]); setSheet(null); setPhoto(null); setTask(null); };
