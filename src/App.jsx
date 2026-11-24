@@ -1118,14 +1118,25 @@ export default function App() {
       setRole(data?.role || 'homeowner');
       reloadTop();
     };
+    // apply() is called for EVERY auth event: the initial getSession(), the
+    // INITIAL_SESSION event, SIGNED_IN, and — crucially — TOKEN_REFRESHED,
+    // which Supabase fires when the app comes back to the foreground. Only a
+    // genuinely new user (no session → session, or a different account)
+    // should reset navigation; a token refresh for the same user must leave
+    // the user's current screen alone, otherwise returning to the app wipes
+    // the restored stack and drops them on the home page.
+    let currentUserId = null;
     const apply = (session) => {
       if (!active) return;
       if (!session) {
+        currentUserId = null;
         setAuth('login'); setRole(null);
         // Session is gone — let the next sign-in run a fresh restore.
         restoredRef.current = false;
         return;
       }
+      if (session.user.id === currentUserId) return; // refresh / duplicate event
+      currentUserId = session.user.id;
       // Enter the app synchronously; never await supabase calls inside the
       // onAuthStateChange callback — doing so deadlocks the auth client and
       // leaves sign-in stuck. Defer the data fetch to the next tick instead.
