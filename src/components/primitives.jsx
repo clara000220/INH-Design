@@ -1,5 +1,6 @@
 /* INH — shared primitives */
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from './Icon.jsx';
 import { INH_DATA } from '../data/data.js';
 import { t } from '../lib/i18n.js';
@@ -230,8 +231,14 @@ export function TabBar({ role, active, onChange, badges }) {
 }
 
 /* Bottom sheet */
+/* Sheets and dialogs are portalled to <body> and pinned to the viewport
+   (position: fixed). Rendering them inline inside a scrolled .inh-scroll
+   pinned them to the top of the scroll content instead, so opening one
+   after scrolling down showed it cut off / half off-screen. */
+const toBody = (node) => (typeof document !== 'undefined' ? createPortal(node, document.body) : node);
+
 export function Sheet({ title, onClose, children }) {
-  return (
+  return toBody(
     <div className="inh-scrim" onClick={onClose}>
       <div className="inh-sheet" onClick={e => e.stopPropagation()}>
         <div className="inh-sheet__grab" />
@@ -244,7 +251,7 @@ export function Sheet({ title, onClose, children }) {
 
 /* Centered confirm dialog */
 export function Dialog({ children, onClose }) {
-  return (
+  return toBody(
     <div className="inh-scrim inh-scrim--center" onClick={onClose}>
       <div className="inh-dialog" onClick={e => e.stopPropagation()}>{children}</div>
     </div>

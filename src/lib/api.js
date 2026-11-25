@@ -301,6 +301,8 @@ const mapCommission = (c) => ({
   project_code: c.project?.code || '',
   title: c.title,
   amount: Number(c.amount) || 0,
+  percent: c.percent != null ? Number(c.percent) : null,
+  base_amount: c.base_amount != null ? Number(c.base_amount) : null,
   note: c.note || '',
   status: c.status,
   decided_by_name: c.decider?.full_name || '',
@@ -317,10 +319,10 @@ export async function listCommissions() {
   if (error) throw error;
   return (data || []).map(mapCommission);
 }
-export async function addCommission({ title, amount, note, project_id, staff_id }) {
+export async function addCommission({ title, amount, note, project_id, staff_id, percent, base_amount }) {
   // staff_id is only honoured for the owner (adding on behalf of a staff
   // member); for everyone else the DB trigger forces it to auth.uid().
-  const row = { title, amount, note: note || null, project_id: project_id || null };
+  const row = { title, amount, note: note || null, project_id: project_id || null, percent: percent || null, base_amount: base_amount || null };
   if (staff_id) row.staff_id = staff_id;
   const { data, error } = await supabase.from('commissions')
     .insert(row)
@@ -328,8 +330,8 @@ export async function addCommission({ title, amount, note, project_id, staff_id 
   if (error) throw error;
   return mapCommission(data);
 }
-export async function updateCommission(id, { title, amount, note, project_id, staff_id }) {
-  const patch = { title, amount, note: note || null, project_id: project_id || null };
+export async function updateCommission(id, { title, amount, note, project_id, staff_id, percent, base_amount }) {
+  const patch = { title, amount, note: note || null, project_id: project_id || null, percent: percent || null, base_amount: base_amount || null };
   if (staff_id) patch.staff_id = staff_id;
   const { data, error } = await supabase.from('commissions')
     .update(patch)

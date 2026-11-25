@@ -332,7 +332,10 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
                   <Pill status={c.status}>{COMMISSION_LABEL[c.status]}</Pill>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, gap: 8 }}>
-                  <div className="inh-figure" style={{ fontSize: 20 }}>{rm(c.amount)}</div>
+                  <div>
+                    <div className="inh-figure" style={{ fontSize: 20 }}>{rm(c.amount)}</div>
+                    {c.percent ? <div className="meta">{c.percent}% of {rm(c.base_amount)}</div> : null}
+                  </div>
                   {mine && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <Icon name="pencil" size={14} color="var(--fg-3)" />
@@ -440,13 +443,36 @@ function CommissionForm({ c, projects = [], staff = [], isOwner = false, onClose
     amount: c?.amount != null ? String(c.amount) : '',
     project_id: c?.project_id || '',
     note: c?.note || '',
+    // 'rm' = type the ringgit amount; 'pct' = percent × base amount.
+    mode: c?.percent ? 'pct' : 'rm',
+    percent: c?.percent != null ? String(c.percent) : '',
+    base: c?.base_amount != null ? String(c.base_amount) : '',
   });
   const initial = useRef(JSON.stringify(f));
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
-  const amt = Math.round((Number(f.amount) || 0) * 100) / 100;
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const quotationOf = (pid) => {
+    const p = projects.find(x => x.id === pid);
+    const q = Number(String(p?.quotation ?? '').replace(/[^0-9.]/g, ''));
+    return q > 0 ? q : 0;
+  };
+  // Picking a project in percentage mode pre-fills the base with that
+  // project's quotation (only if the base is still empty — never overwrite).
+  const setProject = (pid) => setF(s => {
+    const q = quotationOf(pid);
+    return { ...s, project_id: pid, base: (s.mode === 'pct' && !s.base && q) ? String(q) : s.base };
+  });
+  const setMode = (mode) => setF(s => {
+    const q = quotationOf(s.project_id);
+    return { ...s, mode, base: (mode === 'pct' && !s.base && q) ? String(q) : s.base };
+  });
+  const pctNum = Number(f.percent) || 0;
+  const baseNum = r2(f.base);
+  const pctValid = pctNum > 0 && pctNum <= 100 && baseNum > 0;
+  const amt = f.mode === 'pct' ? (pctValid ? r2(baseNum * pctNum / 100) : 0) : r2(f.amount);
   const ready = f.title.trim() && amt > 0 && (!isOwner || f.staff_id);
   const requestClose = () => {
     if (busy) return;
@@ -457,7 +483,12 @@ function CommissionForm({ c, projects = [], staff = [], isOwner = false, onClose
     if (!ready) return;
     setBusy(true); setErr(null);
     try {
-      await onSave({ title: f.title.trim(), amount: amt, project_id: f.project_id || null, note: f.note.trim(), ...(isOwner ? { staff_id: f.staff_id } : {}) });
+      await onSave({
+        title: f.title.trim(), amount: amt, project_id: f.project_id || null, note: f.note.trim(),
+        percent: f.mode === 'pct' ? pctNum : null,
+        base_amount: f.mode === 'pct' ? baseNum : null,
+        ...(isOwner ? { staff_id: f.staff_id } : {}),
+      });
     } catch (e) { setErr(e?.message || 'Could not save commission'); }
     finally { setBusy(false); }
   };
@@ -477,23 +508,60 @@ function CommissionForm({ c, projects = [], staff = [], isOwner = false, onClose
           )}
           <Field label="What is this commission for?" icon="briefcase" value={f.title} onChange={set('title')} placeholder="e.g. Sales commission — kitchen package" autoFocus={!isOwner} />
           <div>
-            <label className="inh-label">Amount</label>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
-              <input type="number" inputMode="decimal" value={f.amount} onChange={e => set('amount')(e.target.value)} placeholder="0.00"
-                style={{ ...inS, padding: '12px 12px 12px 40px', fontSize: 18, fontWeight: 800 }} />
-            </div>
-          </div>
-          <div>
             <label className="inh-label">Project (optional)</label>
-            <select value={f.project_id} onChange={e => set('project_id')(e.target.value)} style={inS}>
+            <select value={f.project_id} onChange={e => setProject(e.target.value)} style={inS}>
               <option value="">— Not linked to a project —</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.code ? p.code + ' · ' : ''}{p.name}</option>)}
             </select>
           </div>
           <div>
+            <label className="inh-label">Commission type</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setMode('rm')} className={'inh-chip' + (f.mode === 'rm' ? ' active' : '')} style={{ flex: 1 }}>RM amount</button>
+              <button onClick={() => setMode('pct')} className={'inh-chip' + (f.mode === 'pct' ? ' active' : '')} style={{ flex: 1 }}>Percentage (%)</button>
+            </div>
+          </div>
+          {f.mode === 'rm' ? (
+            <div>
+              <label className="inh-label">Amount</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
+                <input type="number" inputMode="decimal" value={f.amount} onChange={e => set('amount')(e.target.value)} placeholder="0.00"
+                  style={{ ...inS, padding: '12px 12px 12px 40px', fontSize: 18, fontWeight: 800 }} />
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 110px' }}>
+                  <label className="inh-label">Percentage</label>
+                  <div style={{ position: 'relative' }}>
+                    <input type="number" inputMode="decimal" value={f.percent} onChange={e => set('percent')(e.target.value)} placeholder="5"
+                      style={{ ...inS, padding: '12px 34px 12px 12px', fontSize: 18, fontWeight: 800 }} />
+                    <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 15, color: 'var(--fg-3)', fontWeight: 800, pointerEvents: 'none' }}>%</span>
+                  </div>
+                </div>
+                <div style={{ flex: '2 1 180px' }}>
+                  <label className="inh-label">Of amount (e.g. quotation / sale)</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
+                    <input type="number" inputMode="decimal" value={f.base} onChange={e => set('base')(e.target.value)} placeholder="30000.00"
+                      style={{ ...inS, padding: '12px 12px 12px 40px', fontSize: 18, fontWeight: 800 }} />
+                  </div>
+                </div>
+              </div>
+              {pctNum > 100 && <div style={{ color: 'var(--error)', fontSize: 12.5 }}>Percentage can't be more than 100%.</div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--inh-lime-tint)', borderRadius: 12, padding: '12px 14px' }}>
+                <span style={{ fontSize: 13, color: 'var(--fg-2)', fontWeight: 600 }}>
+                  {pctValid ? <>{pctNum}% of {rm(baseNum)}</> : 'Commission amount'}
+                </span>
+                <span className="inh-figure" style={{ fontSize: 20, color: 'var(--fg-1)' }}>{rm(amt)}</span>
+              </div>
+            </div>
+          )}
+          <div>
             <label className="inh-label">Note (optional)</label>
-            <textarea value={f.note} onChange={e => set('note')(e.target.value)} rows={3} placeholder="e.g. 5% of RM30,000 kitchen package"
+            <textarea value={f.note} onChange={e => set('note')(e.target.value)} rows={3} placeholder="e.g. kitchen package, invoice no."
               style={{ ...inS, resize: 'vertical' }} />
           </div>
           <p className="body-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

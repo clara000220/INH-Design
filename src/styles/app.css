@@ -255,7 +255,7 @@
 
 /* ---------- Sheet / scrim ---------- */
 .inh-scrim {
-  position: absolute; inset: 0; z-index: 80; background: rgba(42,37,35,0.42);
+  position: fixed; inset: 0; z-index: 200; background: rgba(42,37,35,0.42);
   display: flex; align-items: flex-end; animation: scrimIn .2s ease;
 }
 @keyframes scrimIn { from { opacity: 0; } to { opacity: 1; } }
