@@ -57,7 +57,7 @@ export function ProjectsScreen({ role, projects = INH_DATA.projects, onOpenProje
 }
 
 /* =================== FEES — overview (OWNER ONLY) =================== */
-export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = true, pendingCount = 0, onSetFeesComplete }) {
+export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = true, pendingCount = 0, onSetFeesComplete, onOpenCommission, commissionPending = 0 }) {
   const [filter, setFilter] = useState('All');
   const [busyId, setBusyId] = useState(null);
   const totals = fees.reduce((a, p) => ({
@@ -110,6 +110,24 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
             </div>
           </div>
         </div>
+
+        {onOpenCommission && (
+          <button onClick={onOpenCommission}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer',
+              border: '1px solid var(--border-strong)', background: 'var(--surface)', borderRadius: 14, padding: '14px 16px', fontFamily: 'inherit' }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--inh-lime-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon name="wallet" size={20} color="var(--inh-charcoal)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--fg-1)' }}>Staff commission</div>
+              <div className="meta">{isOwner ? 'Review staff commission — Release or Not release' : 'Write down your commission for the boss to approve'}</div>
+            </div>
+            {commissionPending > 0 && (
+              <span style={{ background: 'var(--inh-lime)', color: 'var(--inh-charcoal)', fontWeight: 800, fontSize: 12, borderRadius: 999, padding: '3px 9px' }}>{commissionPending}</span>
+            )}
+            <Icon name="chevron-right" size={16} color="var(--fg-3)" />
+          </button>
+        )}
 
         <div className="inh-chiprow" style={{ padding: 0 }}>
           {chips.map(c => <button key={c} className={'inh-chip' + (filter === c ? ' active' : '')} onClick={() => setFilter(c)}>{c}</button>)}
@@ -168,6 +186,326 @@ export function FeesScreen({ fees = INH_DATA.projects, onOpenProject, isOwner = 
         </div>
       </div>
     </div>
+  );
+}
+
+/* =================== COMMISSIONS (under Fees) ===================
+   Staff write down their commission by hand; the owner (boss) decides
+   Release or Not release. Server-side RLS + trigger enforce the same rules:
+   staff only see/edit their own pending claims, only the owner sets status. */
+const DEMO_COMMISSIONS = [
+  { id: 'c1', staff_id: 'demo-admin', staff_name: 'Aina (Admin)', project_id: null, project_name: 'Tan Residence', project_code: 'P-2026-023', title: 'Sales commission — kitchen package', amount: 1500, note: '5% of RM30,000 kitchen', status: 'pending', date: '20 Nov 2026', created_at: '2026-11-20' },
+  { id: 'c2', staff_id: 'demo-admin', staff_name: 'Aina (Admin)', project_id: null, project_name: 'Lim Condo', project_code: 'P-2026-019', title: 'Referral commission', amount: 800, note: '', status: 'released', decided_by_name: 'Owner', date: '2 Nov 2026', created_at: '2026-11-02' },
+];
+const COMMISSION_LABEL = { pending: 'Pending', released: 'Released', not_released: 'Not released' };
+
+export function CommissionsScreen({ commissions: listProp, isOwner = false, projects = [], meId, onAdd, onUpdate, onSetStatus, onDelete }) {
+  const [list, setList] = useState(listProp || DEMO_COMMISSIONS);
+  useEffect(() => { if (listProp) setList(listProp); }, [listProp]);
+  const [filter, setFilter] = useState('All');
+  const [form, setForm] = useState(null);       // null | { c } (c null = add)
+  const [decide, setDecide] = useState(null);   // { c, status }
+  const [decisionNote, setDecisionNote] = useState('');
+  const [del, setDel] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2600); };
+
+  const sum = (st) => list.filter(c => c.status === st).reduce((a, c) => a + (Number(c.amount) || 0), 0);
+  const chipMatch = {
+    'All': () => true,
+    'Pending': c => c.status === 'pending',
+    'Released': c => c.status === 'released',
+    'Not released': c => c.status === 'not_released',
+  };
+  const visible = list.filter(chipMatch[filter]);
+  const pendingN = list.filter(c => c.status === 'pending').length;
+
+  const replace = (row) => setList(ls => ls.map(c => (c.id === row.id ? { ...c, ...row } : c)));
+
+  const save = async (data) => {
+    if (form?.c) {
+      const row = onUpdate ? await onUpdate(form.c.id, data) : { ...form.c, ...data };
+      replace(row);
+      flash('Commission updated');
+    } else {
+      const proj = projects.find(p => p.id === data.project_id);
+      const row = onAdd ? await onAdd(data) : {
+        id: 'local-' + Date.now(), staff_id: meId, staff_name: 'You', status: 'pending',
+        project_name: proj?.name || '', project_code: proj?.code || '', date: 'Just now', created_at: new Date().toISOString(), ...data,
+      };
+      setList(ls => [row, ...ls]);
+      flash('Commission sent to the boss for approval');
+    }
+    setForm(null);
+  };
+
+  const applyDecision = async () => {
+    const { c, status } = decide;
+    setBusy(true);
+    try {
+      const note = status === 'pending' ? null : decisionNote.trim();
+      const row = onSetStatus ? await onSetStatus(c.id, status, note) : { ...c, status, decision_note: note || '', decided_by_name: status === 'pending' ? '' : 'You' };
+      replace(row);
+      flash(status === 'released' ? `Released ${rm(c.amount)} to ${c.staff_name}` : status === 'not_released' ? 'Marked as not released' : 'Moved back to pending');
+      setDecide(null); setDecisionNote('');
+    } catch (e) { flash(e?.message || 'Could not update commission'); }
+    finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {
+    setBusy(true);
+    try {
+      if (onDelete) await onDelete(del.id);
+      setList(ls => ls.filter(c => c.id !== del.id));
+      setDel(null);
+      flash('Commission deleted');
+    } catch (e) { flash(e?.message || 'Could not delete'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="inh-scroll" style={{ position: 'relative' }}>
+      <div className="inh-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {isOwner && pendingN > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--inh-lime-soft)', border: '1px solid var(--inh-lime)', borderRadius: 12, padding: '12px 14px' }}>
+            <Icon name="bell" size={18} color="var(--inh-charcoal)" />
+            <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: 'var(--inh-charcoal)' }}>{pendingN} commission{pendingN === 1 ? '' : 's'} waiting for your decision</div>
+          </div>
+        )}
+
+        <div className="inh-hero">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+            <Icon name="wallet" size={15} color="var(--inh-lime)" />
+            <span className="inh-eyebrow" style={{ color: 'var(--on-dark-2)' }}>{isOwner ? 'Staff commission · Boss decides' : 'My commission'}</span>
+          </div>
+          <div className="inh-eyebrow" style={{ color: 'var(--on-dark-2)', marginBottom: 3 }}>Waiting for approval</div>
+          <div className="display" style={{ color: 'var(--inh-lime)', fontSize: 34, marginBottom: 14 }}>{rm(sum('pending'))}</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '11px 13px' }}>
+              <div style={{ fontSize: 11, color: 'var(--on-dark-2)', fontWeight: 600 }}>Released</div>
+              <div className="inh-figure" style={{ fontSize: 16, color: 'var(--on-dark)', marginTop: 2 }}>{rm(sum('released'))}</div>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '11px 13px' }}>
+              <div style={{ fontSize: 11, color: 'var(--on-dark-2)', fontWeight: 600 }}>Not released</div>
+              <div className="inh-figure" style={{ fontSize: 16, color: 'var(--on-dark)', marginTop: 2 }}>{rm(sum('not_released'))}</div>
+            </div>
+          </div>
+        </div>
+
+        {!isOwner && (
+          <Btn variant="charcoal" icon="plus" onClick={() => setForm({ c: null })}>Add my commission</Btn>
+        )}
+
+        <div className="inh-chiprow" style={{ padding: 0 }}>
+          {Object.keys(chipMatch).map(c => <button key={c} className={'inh-chip' + (filter === c ? ' active' : '')} onClick={() => setFilter(c)}>{c}</button>)}
+        </div>
+
+        {visible.length === 0 && (
+          <div style={{ padding: '20px 14px', textAlign: 'center', background: 'var(--surface-2)', borderRadius: 12, color: 'var(--fg-2)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>
+              {filter === 'All' ? 'No commission recorded yet.' : `No ${filter.toLowerCase()} commission.`}
+            </div>
+            {!isOwner && filter === 'All' && <div className="meta">Tap <b>Add my commission</b> to write one down.</div>}
+          </div>
+        )}
+
+        <div className="inh-cardgrid">
+          {visible.map(c => {
+            const mine = !isOwner && c.status === 'pending';
+            return (
+              <div key={c.id} className="inh-card" style={{ padding: 16, cursor: mine ? 'pointer' : 'default' }}
+                onClick={mine ? () => setForm({ c }) : undefined}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    {isOwner && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Icon name="user" size={13} color="var(--fg-3)" />
+                        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--fg-2)' }}>{c.staff_name}</span>
+                      </div>
+                    )}
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 16 }}>{c.title}</div>
+                    <div className="inh-row__sub">
+                      {c.project_name ? `${c.project_code ? c.project_code + ' · ' : ''}${c.project_name}` : 'No project linked'} · {c.date}
+                    </div>
+                  </div>
+                  <Pill status={c.status}>{COMMISSION_LABEL[c.status]}</Pill>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, gap: 8 }}>
+                  <div className="inh-figure" style={{ fontSize: 20 }}>{rm(c.amount)}</div>
+                  {mine && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Icon name="pencil" size={14} color="var(--fg-3)" />
+                      <button onClick={(e) => { e.stopPropagation(); setDel(c); }} aria-label="Delete commission"
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', padding: 3 }}>
+                        <Icon name="trash" size={15} color="var(--fg-3)" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {c.note && <p className="body-2" style={{ marginTop: 8 }}>{c.note}</p>}
+                {c.status !== 'pending' && (c.decided_by_name || c.decision_note) && (
+                  <div className="meta" style={{ marginTop: 8 }}>
+                    {COMMISSION_LABEL[c.status]}{c.decided_by_name ? ' by ' + c.decided_by_name : ''}
+                    {c.decision_note ? <> — “{c.decision_note}”</> : null}
+                  </div>
+                )}
+                {!isOwner && c.status === 'pending' && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: 'var(--warning)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Icon name="clock" size={13} color="var(--warning)" /> Waiting for the boss to decide
+                  </div>
+                )}
+                {isOwner && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    {c.status === 'pending' ? (
+                      <>
+                        <Btn variant="charcoal" size="sm" icon="check" onClick={() => setDecide({ c, status: 'released' })}>Release</Btn>
+                        <Btn variant="ghost" size="sm" icon="x" onClick={() => setDecide({ c, status: 'not_released' })}>Not release</Btn>
+                      </>
+                    ) : (
+                      <Btn variant="ghost" size="sm" icon="arrow-left" onClick={() => setDecide({ c, status: 'pending' })}>Undo (back to pending)</Btn>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {form && (
+        <CommissionForm c={form.c} projects={projects} onClose={() => setForm(null)} onSave={save} />
+      )}
+
+      {decide && (
+        <Dialog onClose={() => !busy && setDecide(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px',
+            background: decide.status === 'released' ? 'var(--inh-lime-tint)' : 'var(--surface-2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={decide.status === 'released' ? 'banknote' : decide.status === 'not_released' ? 'x' : 'arrow-left'} size={26} color="var(--inh-charcoal)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>
+            {decide.status === 'released' ? 'Release commission?' : decide.status === 'not_released' ? 'Not release this commission?' : 'Move back to pending?'}
+          </div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 14 }}>
+            <b style={{ color: 'var(--fg-1)' }}>{rm(decide.c.amount)}</b> · {decide.c.title} — {decide.c.staff_name}
+          </p>
+          {decide.status !== 'pending' && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="meta" style={{ marginBottom: 4 }}>Note to staff (optional)</div>
+              <input value={decisionNote} onChange={e => setDecisionNote(e.target.value)}
+                placeholder={decide.status === 'released' ? 'e.g. Paid with November salary' : 'e.g. Project not fully paid yet'}
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 9, padding: '10px 12px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', background: 'var(--surface)' }} />
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => { setDecide(null); setDecisionNote(''); }} disabled={busy}>Cancel</Btn>
+            <Btn variant={decide.status === 'not_released' ? 'danger' : 'charcoal'} onClick={applyDecision} busy={busy}>
+              {decide.status === 'released' ? 'Release' : decide.status === 'not_released' ? 'Not release' : 'Move back'}
+            </Btn>
+          </div>
+        </Dialog>
+      )}
+
+      {del && (
+        <Dialog onClose={() => !busy && setDel(null)}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="trash" size={24} color="var(--error)" />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Delete commission?</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>“{del.title}” ({rm(del.amount)}) will be removed.</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setDel(null)} disabled={busy}>Cancel</Btn>
+            <Btn variant="danger" onClick={doDelete} busy={busy}>Delete</Btn>
+          </div>
+        </Dialog>
+      )}
+
+      {toast && (
+        <div style={{ position: 'absolute', left: 16, right: 16, bottom: 18, zIndex: 90,
+          background: 'var(--inh-charcoal)', color: 'var(--on-dark)', borderRadius: 14, padding: '13px 16px',
+          display: 'flex', alignItems: 'center', gap: 10, boxShadow: 'var(--shadow-lg)', animation: 'sheetUp .24s ease' }}>
+          <Icon name="check-circle" size={20} color="var(--inh-lime)" />
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{toast}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CommissionForm({ c, projects = [], onClose, onSave }) {
+  const [f, setF] = useState({
+    title: c?.title || '',
+    amount: c?.amount != null ? String(c.amount) : '',
+    project_id: c?.project_id || '',
+    note: c?.note || '',
+  });
+  const initial = useRef(JSON.stringify(f));
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
+  const amt = Math.round((Number(f.amount) || 0) * 100) / 100;
+  const ready = f.title.trim() && amt > 0;
+  const requestClose = () => {
+    if (busy) return;
+    if (JSON.stringify(f) !== initial.current) { setConfirmDiscard(true); return; }
+    onClose();
+  };
+  const submit = async () => {
+    if (!ready) return;
+    setBusy(true); setErr(null);
+    try {
+      await onSave({ title: f.title.trim(), amount: amt, project_id: f.project_id || null, note: f.note.trim() });
+    } catch (e) { setErr(e?.message || 'Could not save commission'); }
+    finally { setBusy(false); }
+  };
+  const inS = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 12px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', background: 'var(--surface)' };
+  return (
+    <>
+      <Sheet title={c ? 'Edit commission' : 'Add my commission'} onClose={requestClose}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="What is this commission for?" icon="briefcase" value={f.title} onChange={set('title')} placeholder="e.g. Sales commission — kitchen package" autoFocus />
+          <div>
+            <label className="inh-label">Amount</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: 'var(--fg-3)', fontWeight: 700, pointerEvents: 'none' }}>RM</span>
+              <input type="number" inputMode="decimal" value={f.amount} onChange={e => set('amount')(e.target.value)} placeholder="0.00"
+                style={{ ...inS, padding: '12px 12px 12px 40px', fontSize: 18, fontWeight: 800 }} />
+            </div>
+          </div>
+          <div>
+            <label className="inh-label">Project (optional)</label>
+            <select value={f.project_id} onChange={e => set('project_id')(e.target.value)} style={inS}>
+              <option value="">— Not linked to a project —</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.code ? p.code + ' · ' : ''}{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="inh-label">Note (optional)</label>
+            <textarea value={f.note} onChange={e => set('note')(e.target.value)} rows={3} placeholder="e.g. 5% of RM30,000 kitchen package"
+              style={{ ...inS, resize: 'vertical' }} />
+          </div>
+          <p className="body-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="clock" size={15} color="var(--warning)" /> The boss will choose <b style={{ color: 'var(--fg-1)' }}>Release</b> or <b style={{ color: 'var(--fg-1)' }}>Not release</b>.
+          </p>
+        </div>
+        {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
+        <div style={{ marginTop: 18 }}>
+          <Btn variant="primary" icon="check" onClick={submit} disabled={!ready} busy={busy}>{c ? 'Save changes' : 'Send to boss'}</Btn>
+        </div>
+      </Sheet>
+      {confirmDiscard && (
+        <Dialog onClose={() => setConfirmDiscard(false)}>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, textAlign: 'center', marginBottom: 6 }}>Discard your changes?</div>
+          <p className="body-2" style={{ textAlign: 'center', marginBottom: 18 }}>What you typed hasn't been saved yet.</p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" onClick={() => setConfirmDiscard(false)}>Keep editing</Btn>
+            <Btn variant="danger" onClick={() => { setConfirmDiscard(false); onClose(); }}>Discard</Btn>
+          </div>
+        </Dialog>
+      )}
+    </>
   );
 }
 

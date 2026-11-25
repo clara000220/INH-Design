@@ -11,7 +11,7 @@ import { Login, Register, ForgotFlow, Field } from './screens/auth/Auth.jsx';
 import { getLang, setLang, LANGUAGES, t } from './lib/i18n.js';
 import { OverviewScreen, UpdatesScreen, DocumentsScreen, CAN_EDIT } from './screens/core/CoreScreens.jsx';
 import {
-  ProjectsScreen, FeesScreen, FeesDetailScreen, UsersScreen, TeamScreen, MoreScreen, PlanScreen,
+  ProjectsScreen, FeesScreen, FeesDetailScreen, CommissionsScreen, UsersScreen, TeamScreen, MoreScreen, PlanScreen,
   BackupScreen, backupIsDue,
 } from './screens/owner/OwnerScreens.jsx';
 
@@ -902,6 +902,7 @@ export default function App() {
   const [users, setUsers] = useState(IS_LIVE ? [] : INH_DATA.users);
   const [homeowners, setHomeowners] = useState([]);
   const [fees, setFees] = useState(IS_LIVE ? [] : INH_DATA.projects);
+  const [commissions, setCommissions] = useState([]);
   const [audit, setAudit] = useState(IS_LIVE ? [] : INH_DATA.audit);
   const [detail, setDetail] = useState(null);   // { projectId, phases, schedule, updates, documents, payments, members }
   const [demoNotes, setDemoNotes] = useState({}); // demo-mode notes by projectId (in memory)
@@ -1066,8 +1067,10 @@ export default function App() {
       api.listProjects(), api.getMyProfile(), api.listUsers(),
       api.listHomeowners(), api.listProjectFees(), api.listAudit(), api.listCredentials(),
       api.getStorageUsage(), api.getProjectTemplate(), api.pendingPaymentCount(),
+      api.listCommissions(),
     ]);
-    const [p, pr, us, ho, fe, au, cr, sb, tpl, pc] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    const [p, pr, us, ho, fe, au, cr, sb, tpl, pc, cm] = r.map(x => (x.status === 'fulfilled' ? x.value : null));
+    if (cm) setCommissions(cm);
     if (p) setProjects(p);
     if (pr) setProfile(pr);
     if (us) setUsers(cr ? us.map(u => ({ ...u, ...(cr[u.id] || {}) })) : us);
@@ -1749,6 +1752,24 @@ export default function App() {
     await reloadTop();
   };
 
+  // ---- staff commissions (staff add, owner releases / not releases) ----
+  const upsertCommission = (row) => setCommissions(cs =>
+    cs.some(c => c.id === row.id) ? cs.map(c => (c.id === row.id ? row : c)) : [row, ...cs]);
+  const handleAddCommission = async (data) => { const row = await api.addCommission(data); upsertCommission(row); return row; };
+  const handleUpdateCommission = async (id, data) => { const row = await api.updateCommission(id, data); upsertCommission(row); return row; };
+  const handleSetCommissionStatus = async (id, status, note) => { const row = await api.setCommissionStatus(id, status, note); upsertCommission(row); return row; };
+  const handleDeleteCommission = async (id) => { await api.deleteCommission(id); setCommissions(cs => cs.filter(c => c.id !== id)); };
+  const commissionPending = IS_LIVE ? commissions.filter(c => c.status === 'pending').length : 1;
+  // Refresh when the Fees tab or the commission screen opens so the boss
+  // sees claims staff added from their own phones since the app loaded.
+  const onCommissionView = auth === 'in' && (top?.type === 'commissions' || (tab === 'fees' && !top));
+  useEffect(() => {
+    if (!IS_LIVE || !onCommissionView) return;
+    let active = true;
+    api.listCommissions().then(cs => { if (active) setCommissions(cs); }).catch(() => {});
+    return () => { active = false; };
+  }, [onCommissionView]);
+
   // ---- header config ----
   const header = () => {
     if (top) {
@@ -1760,6 +1781,7 @@ export default function App() {
         users:      { eyebrow: 'Owner tools', title: 'Users', back: pop },
         plan:       { eyebrow: 'Owner tools', title: 'Plan & storage', back: pop },
         backup:     { eyebrow: 'Owner tools', title: 'Backup & export', back: pop },
+        commissions: { eyebrow: role === 'owner' ? 'Fees · Boss decides' : 'Fees', title: 'Staff commission', back: pop },
         template:   { eyebrow: 'Settings', title: 'Default items', back: pop },
         team:       { eyebrow: top.project?.name, title: 'Team & Access', back: pop },
         documents:  { eyebrow: top.project?.name, title: 'Documents', back: pop },
@@ -1822,6 +1844,13 @@ export default function App() {
           onApprove={role === 'owner' ? handleApprovePayment : null}
           isOwner={role === 'owner'}
           canSetStatus={role === 'owner'} />;
+      if (top.type === 'commissions')
+        return <CommissionsScreen commissions={IS_LIVE ? commissions : undefined}
+          isOwner={role === 'owner'} projects={IS_LIVE ? projects : INH_DATA.projects} meId={profile?.id}
+          onAdd={IS_LIVE ? handleAddCommission : null}
+          onUpdate={IS_LIVE ? handleUpdateCommission : null}
+          onSetStatus={IS_LIVE && role === 'owner' ? handleSetCommissionStatus : null}
+          onDelete={IS_LIVE ? handleDeleteCommission : null} />;
       if (top.type === 'plan')
         return <PlanScreen users={IS_LIVE ? users : INH_DATA.users} projects={IS_LIVE ? projects : INH_DATA.projects} storageBytes={storageBytes} />;
       if (top.type === 'backup')
@@ -1892,7 +1921,9 @@ export default function App() {
     if (tab === 'updates')   return <UpdatesScreen role={role} updates={live(detail?.updates)} onPhoto={p => setPhoto(p)} />;
     if (tab === 'documents') return <DocumentsScreen role={role} documents={live(detail?.documents)}
       onUpload={CAN_EDIT(role) ? () => setSheet('uploadDoc') : null} onOpenDoc={handleOpenDoc} />;
-    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} isOwner={role === 'owner'} pendingCount={pendingFees} onSetFeesComplete={role === 'owner' && IS_LIVE ? handleSetFeesComplete : null} />;
+    if (tab === 'fees')      return <FeesScreen fees={IS_LIVE ? fees : undefined} onOpenProject={p => push({ type: 'feesDetail', project: p })} isOwner={role === 'owner'} pendingCount={pendingFees} onSetFeesComplete={role === 'owner' && IS_LIVE ? handleSetFeesComplete : null}
+      onOpenCommission={CAN_EDIT(role) ? () => push({ type: 'commissions' }) : null}
+      commissionPending={role === 'owner' ? commissionPending : 0} />;
     if (tab === 'more')      return <MoreScreen role={role} profile={me}
       onUsers={() => push({ type: 'users' })} onTeam={() => push({ type: 'team', project: currentProject })}
       onAddAccount={IS_LIVE ? () => setSheet('invite') : null}

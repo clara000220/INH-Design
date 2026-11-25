@@ -15,6 +15,7 @@ export const STATUS_PILL = {
   ontrack:   ['pill-ontrack',   'On track'],
   today:     ['pill-today',     'Today'],
   new:       ['pill-new',       'NEW'],
+  not_released: ['pill-overdue', 'Not released'],
 };
 
 export function Pill({ status, children }) {

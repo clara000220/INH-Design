@@ -289,6 +289,61 @@ export async function setFeesComplete(id, complete) {
   if (error) throw error;
 }
 
+/* ---- Staff commissions ----
+   RLS: staff see their own claims, the owner sees all. Only the owner can
+   change status (a DB trigger enforces it and stamps decided_by/decided_at). */
+const mapCommission = (c) => ({
+  id: c.id,
+  staff_id: c.staff_id,
+  staff_name: c.staff?.full_name || 'Staff',
+  project_id: c.project_id,
+  project_name: c.project?.name || '',
+  project_code: c.project?.code || '',
+  title: c.title,
+  amount: Number(c.amount) || 0,
+  note: c.note || '',
+  status: c.status,
+  decided_by_name: c.decider?.full_name || '',
+  decided_at: c.decided_at,
+  decision_note: c.decision_note || '',
+  created_at: c.created_at,
+  date: fmtDate(c.created_at),
+});
+const COMMISSION_SELECT = '*, staff:staff_id(full_name), decider:decided_by(full_name), project:project_id(name, code)';
+
+export async function listCommissions() {
+  const { data, error } = await supabase.from('commissions')
+    .select(COMMISSION_SELECT).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapCommission);
+}
+export async function addCommission({ title, amount, note, project_id }) {
+  const { data, error } = await supabase.from('commissions')
+    .insert({ title, amount, note: note || null, project_id: project_id || null })
+    .select(COMMISSION_SELECT).single();
+  if (error) throw error;
+  return mapCommission(data);
+}
+export async function updateCommission(id, { title, amount, note, project_id }) {
+  const { data, error } = await supabase.from('commissions')
+    .update({ title, amount, note: note || null, project_id: project_id || null })
+    .eq('id', id).select(COMMISSION_SELECT).single();
+  if (error) throw error;
+  return mapCommission(data);
+}
+export async function setCommissionStatus(id, status, decision_note) {
+  const patch = { status };
+  if (decision_note !== undefined) patch.decision_note = decision_note || null;
+  const { data, error } = await supabase.from('commissions')
+    .update(patch).eq('id', id).select(COMMISSION_SELECT).single();
+  if (error) throw error;
+  return mapCommission(data);
+}
+export async function deleteCommission(id) {
+  const { error } = await supabase.from('commissions').delete().eq('id', id);
+  if (error) throw error;
+}
+
 /* ---- Owner backup: pull every project, update, document, and payment ----
    All queries respect RLS, so this only succeeds for owner accounts. Each
    returned row includes the project code so the CSVs are joinable in Excel. */
