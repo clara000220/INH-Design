@@ -199,7 +199,7 @@ const DEMO_COMMISSIONS = [
 ];
 const COMMISSION_LABEL = { pending: 'Pending', released: 'Released', not_released: 'Not released' };
 
-export function CommissionsScreen({ commissions: listProp, isOwner = false, projects = [], meId, onAdd, onUpdate, onSetStatus, onDelete }) {
+export function CommissionsScreen({ commissions: listProp, isOwner = false, projects = [], staff = [], meId, onAdd, onUpdate, onSetStatus, onDelete }) {
   const [list, setList] = useState(listProp || DEMO_COMMISSIONS);
   useEffect(() => { if (listProp) setList(listProp); }, [listProp]);
   const [filter, setFilter] = useState('All');
@@ -230,12 +230,13 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
       flash('Commission updated');
     } else {
       const proj = projects.find(p => p.id === data.project_id);
+      const person = staff.find(s => s.id === data.staff_id);
       const row = onAdd ? await onAdd(data) : {
-        id: 'local-' + Date.now(), staff_id: meId, staff_name: 'You', status: 'pending',
+        id: 'local-' + Date.now(), staff_id: data.staff_id || meId, staff_name: person?.name || 'You', status: 'pending',
         project_name: proj?.name || '', project_code: proj?.code || '', date: 'Just now', created_at: new Date().toISOString(), ...data,
       };
       setList(ls => [row, ...ls]);
-      flash('Commission sent to the boss for approval');
+      flash(isOwner ? `Commission added for ${row.staff_name}` : 'Commission sent to the boss for approval');
     }
     setForm(null);
   };
@@ -293,9 +294,7 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
           </div>
         </div>
 
-        {!isOwner && (
-          <Btn variant="charcoal" icon="plus" onClick={() => setForm({ c: null })}>Add my commission</Btn>
-        )}
+        <Btn variant="charcoal" icon="plus" onClick={() => setForm({ c: null })}>{isOwner ? 'Add commission for staff' : 'Add my commission'}</Btn>
 
         <div className="inh-chiprow" style={{ padding: 0 }}>
           {Object.keys(chipMatch).map(c => <button key={c} className={'inh-chip' + (filter === c ? ' active' : '')} onClick={() => setFilter(c)}>{c}</button>)}
@@ -306,13 +305,14 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>
               {filter === 'All' ? 'No commission recorded yet.' : `No ${filter.toLowerCase()} commission.`}
             </div>
-            {!isOwner && filter === 'All' && <div className="meta">Tap <b>Add my commission</b> to write one down.</div>}
+            {filter === 'All' && <div className="meta">Tap <b>{isOwner ? 'Add commission for staff' : 'Add my commission'}</b> to write one down.</div>}
           </div>
         )}
 
         <div className="inh-cardgrid">
           {visible.map(c => {
-            const mine = !isOwner && c.status === 'pending';
+            // Owner can edit/delete any claim; staff only their own pending ones.
+            const mine = isOwner || c.status === 'pending';
             return (
               <div key={c.id} className="inh-card" style={{ padding: 16, cursor: mine ? 'pointer' : 'default' }}
                 onClick={mine ? () => setForm({ c }) : undefined}>
@@ -374,7 +374,7 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
       </div>
 
       {form && (
-        <CommissionForm c={form.c} projects={projects} onClose={() => setForm(null)} onSave={save} />
+        <CommissionForm c={form.c} projects={projects} staff={staff} isOwner={isOwner} onClose={() => setForm(null)} onSave={save} />
       )}
 
       {decide && (
@@ -433,8 +433,9 @@ export function CommissionsScreen({ commissions: listProp, isOwner = false, proj
   );
 }
 
-function CommissionForm({ c, projects = [], onClose, onSave }) {
+function CommissionForm({ c, projects = [], staff = [], isOwner = false, onClose, onSave }) {
   const [f, setF] = useState({
+    staff_id: c?.staff_id || '',
     title: c?.title || '',
     amount: c?.amount != null ? String(c.amount) : '',
     project_id: c?.project_id || '',
@@ -446,7 +447,7 @@ function CommissionForm({ c, projects = [], onClose, onSave }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
   const amt = Math.round((Number(f.amount) || 0) * 100) / 100;
-  const ready = f.title.trim() && amt > 0;
+  const ready = f.title.trim() && amt > 0 && (!isOwner || f.staff_id);
   const requestClose = () => {
     if (busy) return;
     if (JSON.stringify(f) !== initial.current) { setConfirmDiscard(true); return; }
@@ -456,16 +457,25 @@ function CommissionForm({ c, projects = [], onClose, onSave }) {
     if (!ready) return;
     setBusy(true); setErr(null);
     try {
-      await onSave({ title: f.title.trim(), amount: amt, project_id: f.project_id || null, note: f.note.trim() });
+      await onSave({ title: f.title.trim(), amount: amt, project_id: f.project_id || null, note: f.note.trim(), ...(isOwner ? { staff_id: f.staff_id } : {}) });
     } catch (e) { setErr(e?.message || 'Could not save commission'); }
     finally { setBusy(false); }
   };
   const inS = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 12px', fontSize: 14, fontFamily: 'inherit', color: 'var(--fg-1)', background: 'var(--surface)' };
   return (
     <>
-      <Sheet title={c ? 'Edit commission' : 'Add my commission'} onClose={requestClose}>
+      <Sheet title={c ? 'Edit commission' : (isOwner ? 'Add commission for staff' : 'Add my commission')} onClose={requestClose}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Field label="What is this commission for?" icon="briefcase" value={f.title} onChange={set('title')} placeholder="e.g. Sales commission — kitchen package" autoFocus />
+          {isOwner && (
+            <div>
+              <label className="inh-label">Staff</label>
+              <select value={f.staff_id} onChange={e => set('staff_id')(e.target.value)} style={inS}>
+                <option value="">— Choose who gets this commission —</option>
+                {staff.map(s => <option key={s.id} value={s.id}>{s.name}{s.role === 'owner' ? ' (Owner)' : ''}</option>)}
+              </select>
+            </div>
+          )}
+          <Field label="What is this commission for?" icon="briefcase" value={f.title} onChange={set('title')} placeholder="e.g. Sales commission — kitchen package" autoFocus={!isOwner} />
           <div>
             <label className="inh-label">Amount</label>
             <div style={{ position: 'relative' }}>
@@ -487,12 +497,15 @@ function CommissionForm({ c, projects = [], onClose, onSave }) {
               style={{ ...inS, resize: 'vertical' }} />
           </div>
           <p className="body-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon name="clock" size={15} color="var(--warning)" /> The boss will choose <b style={{ color: 'var(--fg-1)' }}>Release</b> or <b style={{ color: 'var(--fg-1)' }}>Not release</b>.
+            <Icon name="clock" size={15} color="var(--warning)" />
+            {isOwner
+              ? <span>It starts as <b style={{ color: 'var(--fg-1)' }}>Pending</b> — tap <b style={{ color: 'var(--fg-1)' }}>Release</b> or <b style={{ color: 'var(--fg-1)' }}>Not release</b> on it when ready.</span>
+              : <span>The boss will choose <b style={{ color: 'var(--fg-1)' }}>Release</b> or <b style={{ color: 'var(--fg-1)' }}>Not release</b>.</span>}
           </p>
         </div>
         {err && <p style={{ color: 'var(--error)', fontSize: 12.5, marginTop: 10 }}>{err}</p>}
         <div style={{ marginTop: 18 }}>
-          <Btn variant="primary" icon="check" onClick={submit} disabled={!ready} busy={busy}>{c ? 'Save changes' : 'Send to boss'}</Btn>
+          <Btn variant="primary" icon="check" onClick={submit} disabled={!ready} busy={busy}>{c ? 'Save changes' : (isOwner ? 'Add commission' : 'Send to boss')}</Btn>
         </div>
       </Sheet>
       {confirmDiscard && (

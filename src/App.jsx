@@ -1847,6 +1847,8 @@ export default function App() {
       if (top.type === 'commissions')
         return <CommissionsScreen commissions={IS_LIVE ? commissions : undefined}
           isOwner={role === 'owner'} projects={IS_LIVE ? projects : INH_DATA.projects} meId={profile?.id}
+          staff={(IS_LIVE ? users : INH_DATA.users).filter(u => u.role === 'admin' || u.role === 'owner')
+            .sort((a, b) => (a.role === b.role ? String(a.name).localeCompare(String(b.name)) : a.role === 'admin' ? -1 : 1))}
           onAdd={IS_LIVE ? handleAddCommission : null}
           onUpdate={IS_LIVE ? handleUpdateCommission : null}
           onSetStatus={IS_LIVE && role === 'owner' ? handleSetCommissionStatus : null}

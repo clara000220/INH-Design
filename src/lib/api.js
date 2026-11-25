@@ -317,16 +317,22 @@ export async function listCommissions() {
   if (error) throw error;
   return (data || []).map(mapCommission);
 }
-export async function addCommission({ title, amount, note, project_id }) {
+export async function addCommission({ title, amount, note, project_id, staff_id }) {
+  // staff_id is only honoured for the owner (adding on behalf of a staff
+  // member); for everyone else the DB trigger forces it to auth.uid().
+  const row = { title, amount, note: note || null, project_id: project_id || null };
+  if (staff_id) row.staff_id = staff_id;
   const { data, error } = await supabase.from('commissions')
-    .insert({ title, amount, note: note || null, project_id: project_id || null })
+    .insert(row)
     .select(COMMISSION_SELECT).single();
   if (error) throw error;
   return mapCommission(data);
 }
-export async function updateCommission(id, { title, amount, note, project_id }) {
+export async function updateCommission(id, { title, amount, note, project_id, staff_id }) {
+  const patch = { title, amount, note: note || null, project_id: project_id || null };
+  if (staff_id) patch.staff_id = staff_id;
   const { data, error } = await supabase.from('commissions')
-    .update({ title, amount, note: note || null, project_id: project_id || null })
+    .update(patch)
     .eq('id', id).select(COMMISSION_SELECT).single();
   if (error) throw error;
   return mapCommission(data);
